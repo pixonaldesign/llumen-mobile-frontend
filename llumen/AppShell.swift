@@ -6,22 +6,30 @@ struct AppShell: View {
     var body: some View {
         @Bindable var model = model
         LlumenBackground {
-            ZStack(alignment: .bottom) {
-                Group {
-                    switch model.tab {
-                        case .briefings: BriefingsScreen()
-                        case .board: BoardScreen()
-                        case .profile: ProfileScreen()
+            ZStack(alignment: .top) {
+                ZStack(alignment: .bottom) {
+                    Group {
+                        switch model.tab {
+                            case .briefings: BriefingsScreen()
+                            case .board: BoardScreen()
+                            case .profile: ProfileScreen()
+                        }
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    FindingAuroraOverlay(mode: model.findingMode)
+                        .animation(Theme.motion, value: model.findingMode)
+
+                    LlumenTabBar()
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                FindingAuroraOverlay(mode: model.findingMode)
-                    .animation(Theme.motion, value: model.findingMode)
-
-                LlumenTabBar()
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+                // Above the aurora canvas so the glass pill matches in toast and alert.
+                if model.tab == .briefings, model.briefingMode == .latest {
+                    BriefingModeSwitcher()
+                        .padding(.top, 8)
+                }
             }
         }
         .fullScreenCover(item: $model.story) { route in

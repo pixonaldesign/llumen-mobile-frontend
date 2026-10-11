@@ -148,7 +148,7 @@ struct StoryPlayer: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(Theme.spaceXL)
-            .background(Theme.neutral800, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
         }
     }
 
@@ -233,7 +233,7 @@ private struct ChartHero: View {
         }
         .padding(Theme.spaceXL)
         .frame(maxWidth: .infinity, alignment: .top)
-        .background(Theme.neutral800, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
     }
 }
 

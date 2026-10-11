@@ -50,7 +50,7 @@ struct FocusScreen: View {
                         .foregroundStyle(Theme.text)
                         .padding(Theme.spaceXL)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Theme.neutral800, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
                 }
                 Spacer()
                 VStack(alignment: .leading, spacing: 8) {
@@ -69,7 +69,7 @@ struct FocusScreen: View {
                         .frame(height: 8)
                 }
                 .padding(Theme.spaceXL)
-                .background(Theme.neutral800.opacity(0.95), in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
             }
             .padding(.horizontal, Theme.spaceXL)
             .padding(.bottom, Theme.spaceXL)
@@ -99,7 +99,7 @@ struct FocusScreen: View {
             }
             .padding(Theme.spaceXL)
             .frame(maxWidth: .infinity)
-            .background(Theme.neutral800, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
             HStack(spacing: 6) {
                 RoundedRectangle(cornerRadius: 2).fill(Theme.negative).frame(width: 12, height: 8)
                 Text("Violation share")

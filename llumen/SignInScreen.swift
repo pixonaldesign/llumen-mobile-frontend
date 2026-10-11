@@ -47,11 +47,7 @@ struct SignInScreen: View {
                             .buttonStyle(.plain)
                         }
                         .padding(Theme.spaceXL)
-                        .background(Theme.fillQuiet, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
-                        .overlay {
-                            RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous)
-                                .strokeBorder(Theme.border, lineWidth: 1)
-                        }
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
                     }
                     .padding(.horizontal, Theme.spaceXL)
                     .padding(.bottom, Theme.space4XL)
@@ -97,7 +93,7 @@ struct SignInScreen: View {
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 12)
             .frame(height: 44)
-            .background(Theme.neutral800, in: RoundedRectangle(cornerRadius: Theme.radiusUI, style: .continuous))
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusUI, style: .continuous))
         }
         .id(id)
     }

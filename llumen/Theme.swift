@@ -56,12 +56,17 @@ enum LumenFont {
         }
     }
 
-    static func font(_ size: CGFloat, _ weight: Weight = .regular) -> Font {
+    /// Fixed sizes stay put. Pass `relativeTo` so finding copy follows Dynamic Type
+    /// the way Apple’s text styles do, without resizing the rest of the app.
+    static func font(_ size: CGFloat, _ weight: Weight = .regular, relativeTo style: Font.TextStyle? = nil) -> Font {
         let name: String
         switch weight {
         case .medium: name = "InnovatorGrotesk-Medium"
         case .semibold: name = "InnovatorGrotesk-SemiBold"
         case .regular: name = "InnovatorGrotesk-Regular"
+        }
+        if let style {
+            return .custom(name, size: size, relativeTo: style)
         }
         return .custom(name, size: size)
     }

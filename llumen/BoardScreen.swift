@@ -50,10 +50,7 @@ struct BoardScreen: View {
                             .foregroundStyle(model.editingBoard ? Color.black : Theme.text)
                             .padding(.horizontal, 16)
                             .frame(height: 36)
-                            .background(model.editingBoard ? Theme.primary : Theme.fillQuiet, in: Capsule())
-                            .overlay {
-                                Capsule().strokeBorder(model.editingBoard ? Theme.primary : Theme.border, lineWidth: 1)
-                            }
+                            .glassEffect(model.editingBoard ? .regular.tint(Theme.primary).interactive() : .regular.interactive(), in: Capsule())
                     }
                     .buttonStyle(.plain)
                 }
@@ -160,7 +157,7 @@ struct BoardScreen: View {
                                     .font(LumenFont.font(11, .semibold))
                                     .foregroundStyle(Theme.text)
                                     .frame(width: 26, height: 26)
-                                    .background(Theme.fillQuiet, in: Circle())
+                                    .glassEffect(.regular.interactive(), in: Circle())
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("Size \(widget.size.title)")
@@ -181,7 +178,9 @@ struct BoardScreen: View {
         }
         .buttonStyle(.plain)
         .draggable(widget.id) {
-            Text(widget.title).padding().background(.ultraThinMaterial)
+            Text(widget.title)
+                .padding()
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusUI, style: .continuous))
         }
         .dropDestination(for: String.self) { items, _ in
             guard let source = items.first, source != widget.id,
@@ -279,7 +278,7 @@ private struct FilterSheet: View {
                             .foregroundStyle(Theme.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .listRowBackground(Theme.neutral800)
+                    .listRowBackground(GlassRowBackground())
                 }
             }
             .scrollContentBackground(.hidden)
@@ -326,7 +325,7 @@ private struct PickerSheet: View {
                                 .foregroundStyle(Theme.textSecondary)
                         }
                     }
-                    .listRowBackground(Theme.neutral800)
+                    .listRowBackground(GlassRowBackground())
                 }
             }
             .scrollContentBackground(.hidden)

@@ -1,30 +1,26 @@
 import SwiftUI
 
-/// Story listing from `LandingHomeDefault` `RECOMMENDED`, with the Figma story thumbs.
+/// Story listing from `LandingHomeDefault` `RECOMMENDED`.
 private struct ListedStory: Identifiable {
-    enum Thumb { case map, chart, satellite }
     var id: String
     var category: String
     var title: String
-    var kind: String
-    var sections: String
-    var thumb: Thumb
 }
 
 private enum StoryListing {
     static let recommended: [ListedStory] = [
-        .init(id: "r1", category: "Engineering", title: "Building a Scalable Microservices Architecture From the Ground Up", kind: "Story", sections: "19 Sections", thumb: .map),
-        .init(id: "r2", category: "Marketing", title: "Brand Repositioning Strategy for the Next-Gen Consumer Market", kind: "Story", sections: "19 Sections", thumb: .chart),
-        .init(id: "r3", category: "Product", title: "User Onboarding Redesign: Reducing Time-to-Value by 40%", kind: "Story", sections: "19 Sections", thumb: .satellite),
-        .init(id: "r4", category: "Sales", title: "Enterprise Pipeline Acceleration: Lessons From Q3 Wins", kind: "Story", sections: "19 Sections", thumb: .map),
-        .init(id: "r5", category: "Operations", title: "Streamlining Cross-Team Workflows With Automation", kind: "Story", sections: "19 Sections", thumb: .chart),
-        .init(id: "r6", category: "HR", title: "Remote Culture Playbook: Keeping Teams Connected at Scale", kind: "Story", sections: "19 Sections", thumb: .satellite),
-        .init(id: "r7", category: "Customer Success", title: "Reducing Churn Through Proactive Health Scoring", kind: "Story", sections: "19 Sections", thumb: .chart),
-        .init(id: "r8", category: "Finance", title: "Annual Budget Planning Framework for Hypergrowth Startups", kind: "Story", sections: "19 Sections", thumb: .map),
-        .init(id: "r9", category: "IT", title: "Zero-Trust Security Rollout: A 90-Day Implementation Guide", kind: "Story", sections: "19 Sections", thumb: .satellite),
-        .init(id: "r10", category: "Engineering", title: "Migrating Legacy Systems to Cloud-Native Infrastructure", kind: "Story", sections: "19 Sections", thumb: .map),
-        .init(id: "r11", category: "Marketing", title: "Content-Led Growth: Driving Organic Acquisition at Scale", kind: "Story", sections: "19 Sections", thumb: .chart),
-        .init(id: "r12", category: "Product", title: "Feature Prioritization With Impact vs Effort Scoring", kind: "Story", sections: "19 Sections", thumb: .satellite),
+        .init(id: "r1", category: "Engineering", title: "Building a Scalable Microservices Architecture From the Ground Up"),
+        .init(id: "r2", category: "Marketing", title: "Brand Repositioning Strategy for the Next-Gen Consumer Market"),
+        .init(id: "r3", category: "Product", title: "User Onboarding Redesign: Reducing Time-to-Value by 40%"),
+        .init(id: "r4", category: "Sales", title: "Enterprise Pipeline Acceleration: Lessons From Q3 Wins"),
+        .init(id: "r5", category: "Operations", title: "Streamlining Cross-Team Workflows With Automation"),
+        .init(id: "r6", category: "HR", title: "Remote Culture Playbook: Keeping Teams Connected at Scale"),
+        .init(id: "r7", category: "Customer Success", title: "Reducing Churn Through Proactive Health Scoring"),
+        .init(id: "r8", category: "Finance", title: "Annual Budget Planning Framework for Hypergrowth Startups"),
+        .init(id: "r9", category: "IT", title: "Zero-Trust Security Rollout: A 90-Day Implementation Guide"),
+        .init(id: "r10", category: "Engineering", title: "Migrating Legacy Systems to Cloud-Native Infrastructure"),
+        .init(id: "r11", category: "Marketing", title: "Content-Led Growth: Driving Organic Acquisition at Scale"),
+        .init(id: "r12", category: "Product", title: "Feature Prioritization With Impact vs Effort Scoring"),
     ]
 }
 
@@ -34,11 +30,7 @@ struct BriefingsScreen: View {
     var body: some View {
         switch model.briefingMode {
         case .latest:
-            ZStack(alignment: .top) {
-                FeedReel()
-                BriefingModeSwitcher()
-                    .padding(.top, 8)
-            }
+            FeedReel()
         case .all:
             AllBriefingsGrid()
         }
@@ -56,7 +48,7 @@ struct BriefingModeSwitcher: View {
                     withAnimation(Theme.motion) { model.briefingMode = mode }
                 } label: {
                     Text(mode.title)
-                        .font(LumenFont.font(13, .medium))
+                        .font(LumenFont.font(15, .medium, relativeTo: .subheadline))
                         .foregroundStyle(selected ? Color.black : Theme.textSecondary)
                         .padding(.horizontal, 16)
                         .frame(minWidth: 84)
@@ -75,7 +67,6 @@ struct BriefingModeSwitcher: View {
 }
 
 private struct AllBriefingsGrid: View {
-    @Environment(AppModel.self) private var model
     private let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12),
@@ -91,14 +82,9 @@ private struct AllBriefingsGrid: View {
                 }
                 .padding(.top, 8)
 
-                LazyVGrid(columns: columns, spacing: 16) {
+                LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(StoryListing.recommended) { story in
-                        Button {
-                            model.story = StoryRoute(id: story.id, title: story.title)
-                        } label: {
-                            StoryGridCard(story: story)
-                        }
-                        .buttonStyle(.plain)
+                        StoryGridCard(story: story)
                     }
                 }
             }
@@ -110,6 +96,7 @@ private struct AllBriefingsGrid: View {
 }
 
 private struct StoryGridCard: View {
+    @Environment(AppModel.self) private var model
     var story: ListedStory
 
     private var shape: RoundedRectangle {
@@ -117,67 +104,65 @@ private struct StoryGridCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            storyMedia
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 8) {
+        ZStack(alignment: .topTrailing) {
+            Button {
+                openStory()
+            } label: {
+                VStack(alignment: .leading, spacing: 10) {
                     Text(story.category)
                         .font(LumenFont.font(12, .semibold))
                         .textCase(.uppercase)
                         .foregroundStyle(Color.white.opacity(0.48))
                         .lineLimit(1)
+                        .padding(.trailing, 28)
                     Text(story.title)
-                        .font(LumenFont.font(15, .semibold))
+                        .font(LumenFont.font(16, .semibold))
                         .foregroundStyle(Color.white)
-                        .lineSpacing(2)
+                        .lineSpacing(3)
                         .multilineTextAlignment(.leading)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
-                Text("\(story.kind) / \(story.sections)")
-                    .font(LumenFont.font(12))
-                    .foregroundStyle(Color.white.opacity(0.48))
-                    .lineLimit(1)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(.ultraThinMaterial, in: shape)
-        .background(Color.black.opacity(0.56), in: shape)
-        .overlay { shape.strokeBorder(Color.white.opacity(0.1), lineWidth: 1) }
-        .clipShape(shape)
-        .accessibilityElement(children: .combine)
-    }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(story.category), \(story.title)")
 
-    private var storyMedia: some View {
-        ZStack {
-            Image(story.thumb == .map ? "story-thumb-map-base" : "story-thumb-chart-base")
-                .resizable()
-                .scaledToFill()
-            if story.thumb == .map {
-                Image("story-thumb-map-markers")
-                    .resizable()
-                    .scaledToFill()
-            } else if story.thumb == .chart {
-                Image("story-thumb-chart-bars")
-                    .resizable()
-                    .scaledToFill()
+            Menu {
+                Button(action: openStory) {
+                    Label("Open story", systemImage: "book")
+                }
+                Button(action: tellMeMore) {
+                    Label("Tell me more", systemImage: "text.bubble")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
             }
+            .menuOrder(.fixed)
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+            .padding(.trailing, 4)
+            .accessibilityLabel("More actions")
         }
         .frame(maxWidth: .infinity)
-        .aspectRatio(363.2 / 204.3, contentMode: .fill)
-        .mask(
-            LinearGradient(
-                stops: [
-                    .init(color: .black, location: 0),
-                    .init(color: .black, location: 0.55),
-                    .init(color: .clear, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-        .clipped()
+        .aspectRatio(3.0 / 4.0, contentMode: .fit)
+        .glassEffect(.regular.interactive(), in: shape)
+    }
+
+    private func openStory() {
+        model.story = StoryRoute(id: story.id, title: story.title)
+    }
+
+    private func tellMeMore() {
+        model.attachedBriefing = story.title
+        model.chatTitle = story.title
+        model.showChat = true
     }
 }
 
@@ -500,24 +485,28 @@ private struct FeedPage: View {
     }
 
     private var actions: some View {
-        ViewThatFits(in: .horizontal) {
-            actionRow
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 10) {
-                    tellMeMore
-                    if stop.storyId != nil { openStory }
-                }
-                voteGroup
-            }
+        HStack(spacing: 10) {
+            tellMeMore
+            feedOverflow
         }
     }
 
-    private var actionRow: some View {
-        HStack(spacing: 10) {
-            tellMeMore
-            if stop.storyId != nil { openStory }
-            voteGroup
-        }
+    /// Feed context: Open story when this briefing has one, plus the vote. No Keep monitoring.
+    private var feedOverflow: some View {
+        CircleOverflowButton(
+            open: stop.storyId == nil ? nil : (
+                title: "Open story",
+                symbol: "text.page",
+                action: {
+                    guard let storyId = stop.storyId else { return }
+                    model.story = StoryRoute(id: storyId, title: stop.title)
+                }
+            ),
+            helpfulSelected: vote == .up,
+            notHelpfulSelected: vote == .down,
+            onHelpful: { onVote(.up) },
+            onNotHelpful: { onVote(.down) }
+        )
     }
 
     private var tellMeMore: some View {
@@ -542,48 +531,6 @@ private struct FeedPage: View {
         .buttonStyle(.plain)
     }
 
-    private var openStory: some View {
-        Button {
-            guard let storyId = stop.storyId else { return }
-            model.story = StoryRoute(id: storyId, title: stop.title)
-        } label: {
-            Text("Open story")
-                .font(LumenFont.font(14, .medium))
-                .foregroundStyle(Color.white)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .overlay {
-                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var voteGroup: some View {
-        HStack(spacing: 8) {
-            voteButton(.up, symbol: "hand.thumbsup", label: "Helpful")
-            voteButton(.down, symbol: "hand.thumbsdown", label: "Not helpful")
-        }
-    }
-
-    private func voteButton(_ value: FeedVote, symbol: String, label: String) -> some View {
-        let selected = vote == value
-        return Button {
-            onVote(value)
-        } label: {
-            Image(systemName: selected ? "\(symbol).fill" : symbol)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(Color.white)
-                .frame(width: 44, height: 44)
-                .background(selected ? Color.white.opacity(0.12) : Color.clear, in: Circle())
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
 }
 
 private struct FeedChartCard: View {
@@ -632,9 +579,7 @@ private struct FeedChartCard: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: shape)
-        .background(Color(hex: 0x080C14).opacity(0.72), in: shape)
-        .overlay { shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 1) }
+        .glassEffect(.regular, in: shape)
     }
 }
 

@@ -59,13 +59,15 @@ struct FindingAuroraOverlay: View {
     @Environment(AppModel.self) private var model
     var mode: FindingAuroraMode
     @State private var votes: [String: FindingVote] = [:]
+    @State private var auroraRise: CGFloat = 0.001
+    @State private var pageDrag: CGFloat = 0
+    @State private var slideID = 0
+    @State private var sliding = false
 
     private var index: Int {
         guard !FindingLibrary.items.isEmpty else { return 0 }
         return min(max(model.findingIndex, 0), FindingLibrary.items.count - 1)
     }
-
-    private var item: FindingItem { FindingLibrary.items[index] }
 
     var body: some View {
         GeometryReader { geo in
@@ -73,6 +75,22 @@ struct FindingAuroraOverlay: View {
             let home = max(geo.safeAreaInsets.bottom, 34)
             let bottomPad = home + Theme.chromeClearance
             ZStack(alignment: .bottom) {
+                if mode == .alert {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.16),
+                            .init(color: Color.black.opacity(0.45), location: 0.4),
+                            .init(color: Color.black.opacity(0.78), location: 0.66),
+                            .init(color: Color.black.opacity(0.9), location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+
                 AuroraField(
                     stops: FindingLibrary.alertStops,
                     fadeHold: fadeHold,
@@ -80,24 +98,38 @@ struct FindingAuroraOverlay: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .ignoresSafeArea()
-                .opacity(mode == .alert ? 1 : 0)
-                .animation(nil, value: mode)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0),
+                            .init(color: .black, location: 0.08),
+                            .init(color: .black, location: 1),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .scaleEffect(y: auroraRise, anchor: .bottom)
+                }
+                .mask(alignment: .bottom) {
+                    Rectangle().padding(.top, max(geo.safeAreaInsets.top, 54) + 64)
+                }
+                .opacity(mode == .alert || auroraRise > 0.02 ? 1 : 0)
+                .animation(.none, value: mode)
                 .allowsHitTesting(false)
                 .accessibilityHidden(mode != .alert)
+                .onAppear {
+                    guard mode == .alert else { return }
+                    setAurora(showing: true)
+                }
+                .onChange(of: mode) { _, new in
+                    setAurora(showing: new == .alert)
+                }
 
                 switch mode {
                 case .off:
                     Color.clear.allowsHitTesting(false)
-                case .alert:
-                    ZStack(alignment: .bottom) {
-                        alertVeil
-                        alertCopy
-                            .padding(.horizontal, 24)
-                            .padding(.bottom, bottomPad)
-                    }
-                    .contentShape(Rectangle())
-                case .chip:
-                    chipStack
+                case .alert, .chip:
+                    findingLayout(bottomPad: bottomPad, width: geo.size.width, card: mode == .chip)
                 }
             }
             .allowsHitTesting(mode != .off)
@@ -116,103 +148,183 @@ struct FindingAuroraOverlay: View {
             }
     }
 
-    private var alertVeil: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            LinearGradient(
-                stops: [
-                    .init(color: .clear, location: 0),
-                    .init(color: Color.black.opacity(0.28), location: 0.18),
-                    .init(color: Color.black.opacity(0.62), location: 0.42),
-                    .init(color: Color.black.opacity(0.78), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 620)
-            .background(alignment: .bottom) {
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .frame(height: 420)
-                    .mask(
-                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                    )
+    /// Light rises from the bottom edge, then rests at full brightness.
+    private func setAurora(showing: Bool) {
+        if showing {
+            var reset = Transaction()
+            reset.disablesAnimations = true
+            withTransaction(reset) { auroraRise = 0.001 }
+            DispatchQueue.main.async {
+                withAnimation(.easeIn(duration: 0.525)) { auroraRise = 1 }
             }
+        } else {
+            pageDrag = 0
+            withAnimation(.easeIn(duration: 0.32)) { auroraRise = 0.001 }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .allowsHitTesting(false)
-        .ignoresSafeArea()
     }
 
-    private var alertCopy: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center) {
-                Text(item.domain)
-                    .font(LumenFont.font(13, .medium))
-                    .foregroundStyle(Color.white.opacity(0.72))
+    /// Toast and aurora share this stack. The page control sits outside the cards.
+    private func findingLayout(bottomPad: CGFloat, width: CGFloat, card: Bool) -> some View {
+        VStack(spacing: 12) {
+            cardStrip(width: width, card: card)
+            pageControl(width: width)
+        }
+        .padding(.bottom, bottomPad)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+    }
+
+    /// One strip. Each page is a card with its content fixed inside it.
+    private func cardStrip(width: CGFloat, card: Bool) -> some View {
+        HStack(alignment: .bottom, spacing: 0) {
+            ForEach(FindingLibrary.items.indices, id: \.self) { i in
+                findingPage(FindingLibrary.items[i], card: card)
+                    .frame(width: width, alignment: .bottom)
+            }
+        }
+        .offset(x: -CGFloat(index) * width + pageDrag)
+        .frame(width: width, alignment: .leading)
+        .clipped()
+        .simultaneousGesture(pageSwipe(width: width))
+    }
+
+    private func findingPage(_ pageItem: FindingItem, card: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(pageItem.domain)
+                    .font(LumenFont.font(15, .medium, relativeTo: .subheadline))
+                    .foregroundStyle(Color.white.opacity(0.78))
+                    .lineLimit(1)
                 Spacer(minLength: 8)
                 close
             }
-            findingText(size: 22)
-            alertActions
+            findingText(pageItem)
+            findingActions(pageItem)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .modifier(FindingCardGlass(enabled: card))
+        .padding(.horizontal, 16)
     }
 
-    /// Bottom row matches the toast: Tell me more leading, pager trailing.
-    private var alertActions: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 10) {
-                    keepMonitoring
-                    if item.storyId != nil { openSlides }
-                    voteGroup
-                }
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 10) {
-                        keepMonitoring
-                        if item.storyId != nil { openSlides }
+    /// Tell me more, then the circular overflow. Paging moves the whole card.
+    private func findingActions(_ pageItem: FindingItem) -> some View {
+        HStack(spacing: 10) {
+            tellMeMore(pageItem)
+            findingOverflow(pageItem)
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// Dots sit under the cards, with no chrome of their own.
+    private func pageControl(width: CGFloat) -> some View {
+        FindingPageControl(
+            count: FindingLibrary.items.count,
+            index: index,
+            suppressSync: sliding,
+            onSelect: { page in
+                guard FindingLibrary.items.indices.contains(page), page != index else { return }
+                slide(to: page, width: width)
+            }
+        )
+        .frame(height: 22)
+        .frame(maxWidth: .infinity)
+        .accessibilityHint("Swipe left or right to switch findings")
+    }
+
+    private func pageSwipe(width: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .local)
+            .onChanged { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dx) > abs(dy) else { return }
+                if abs(dx) < 36 { slideID += 1 }
+                let last = FindingLibrary.items.count - 1
+                let blocked = (index == 0 && dx > 0) || (index == last && dx < 0)
+                let travel = blocked ? dx * 0.22 : dx
+                var track = Transaction()
+                track.disablesAnimations = true
+                withTransaction(track) { pageDrag = travel }
+            }
+            .onEnded { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                let flick = value.predictedEndTranslation.width
+                let last = FindingLibrary.items.count - 1
+                let horizontal = abs(dx) > abs(dy)
+                if horizontal && index < last && (dx < -48 || flick < -120) {
+                    slide(to: index + 1, width: width)
+                } else if horizontal && index > 0 && (dx > 48 || flick > 120) {
+                    slide(to: index - 1, width: width)
+                } else {
+                    slideID += 1
+                    let token = slideID
+                    withAnimation(Theme.motion, completionCriteria: .logicallyComplete) {
+                        pageDrag = 0
+                    } completion: {
+                        guard slideID == token else { return }
                     }
-                    voteGroup
                 }
             }
-            HStack(spacing: 10) {
-                tellMeMore
-                Spacer(minLength: 0)
-                nav
+    }
+
+    /// Slides the strip so the card and its content stay one object, then settles the index.
+    private func slide(to page: Int, width: CGFloat) {
+        guard width > 1, page != index else { return }
+        slideID += 1
+        let token = slideID
+        sliding = true
+        let target = -CGFloat(page - index) * width
+        withAnimation(Theme.motion, completionCriteria: .logicallyComplete) {
+            pageDrag = target
+        } completion: {
+            guard slideID == token else { return }
+            var snap = Transaction()
+            snap.disablesAnimations = true
+            withTransaction(snap) {
+                model.findingIndex = page
+                pageDrag = 0
+                sliding = false
             }
         }
     }
 
-    private var keepMonitoring: some View {
-        Button {
-            withAnimation(Theme.motion) { model.findingMode = .off }
-        } label: {
-            Text("Keep monitoring")
-                .font(LumenFont.font(14, .medium))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .overlay {
-                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+    /// Finding context: Open slides when this finding has a story, plus Keep monitoring and the vote.
+    private func findingOverflow(_ pageItem: FindingItem) -> some View {
+        CircleOverflowButton(
+            open: pageItem.storyId == nil ? nil : (
+                title: "Open slides",
+                symbol: "rectangle.stack",
+                action: {
+                    guard let storyId = pageItem.storyId else { return }
+                    model.story = StoryRoute(id: storyId, title: pageItem.title)
                 }
-        }
-        .buttonStyle(.plain)
+            ),
+            keepMonitoring: {
+                withAnimation(Theme.motion) { model.findingMode = .off }
+            },
+            helpfulSelected: votes[pageItem.id] == .up,
+            notHelpfulSelected: votes[pageItem.id] == .down,
+            onHelpful: { vote(pageItem, .up) },
+            onNotHelpful: { vote(pageItem, .down) }
+        )
     }
 
-    private var tellMeMore: some View {
+    private func vote(_ pageItem: FindingItem, _ value: FindingVote) {
+        votes[pageItem.id] = votes[pageItem.id] == value ? nil : value
+    }
+
+    private func tellMeMore(_ pageItem: FindingItem) -> some View {
         Button {
-            model.attachedBriefing = item.title
-            model.chatTitle = item.title
+            model.attachedBriefing = pageItem.title
+            model.chatTitle = pageItem.title
             model.showChat = true
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "text.bubble")
                     .font(.system(size: 16, weight: .regular))
                 Text("Tell me more")
-                    .font(LumenFont.font(14, .medium))
+                    .font(LumenFont.font(16, .medium, relativeTo: .callout))
                     .lineLimit(1)
             }
             .foregroundStyle(Color.white)
@@ -227,144 +339,19 @@ struct FindingAuroraOverlay: View {
         .buttonStyle(.plain)
     }
 
-    private var openSlides: some View {
-        Button {
-            guard let storyId = item.storyId else { return }
-            model.story = StoryRoute(id: storyId, title: item.title)
-        } label: {
-            Text("Open slides")
-                .font(LumenFont.font(14, .medium))
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 12)
-                .frame(height: 44)
-                .overlay {
-                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-                }
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var voteGroup: some View {
-        HStack(spacing: 8) {
-            voteButton(.up, symbol: "hand.thumbsup", label: "Helpful")
-            voteButton(.down, symbol: "hand.thumbsdown", label: "Not helpful")
-        }
-    }
-
-    private func voteButton(_ value: FindingVote, symbol: String, label: String) -> some View {
-        let selected = votes[item.id] == value
-        return Button {
-            votes[item.id] = votes[item.id] == value ? nil : value
-        } label: {
-            Image(systemName: selected ? "\(symbol).fill" : symbol)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(Color.white)
-                .frame(width: 44, height: 44)
-                .background(selected ? Color.white.opacity(0.12) : Color.clear, in: Circle())
-                .overlay {
-                    Circle().strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
-                }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
-    private var chipStack: some View {
-        VStack {
-            Spacer(minLength: 0)
-            chipCard(item: item)
-                .background {
-                    ZStack {
-                        if index + 2 < FindingLibrary.items.count {
-                            chipBack
-                                .padding(.horizontal, 16)
-                                .offset(y: -28)
-                        }
-                        if index + 1 < FindingLibrary.items.count {
-                            chipBack
-                                .padding(.horizontal, 8)
-                                .offset(y: -14)
-                        }
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 58 + 8 + 16)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    /// Same height as the front card, shifted up so only a lip shows. No labels or body.
-    private var chipBack: some View {
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-            .fill(Color(hex: 0x0E1014).opacity(0.28))
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-    }
-
-    private func chipCard(item: FindingItem) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(item.domain)
-                    .font(LumenFont.font(11))
-                    .foregroundStyle(Color.white.opacity(0.55))
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                close
-            }
-            findingText(size: 15)
-                .lineLimit(3)
-            HStack(spacing: 10) {
-                Button {
-                    model.attachedBriefing = item.title
-                    model.chatTitle = item.title
-                    model.findingMode = .off
-                    model.showChat = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "text.bubble")
-                        Text("Tell me more")
-                    }
-                    .font(LumenFont.font(13, .medium))
-                    .foregroundStyle(Color.white)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                Spacer(minLength: 0)
-                nav
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 18)
-        .frame(maxWidth: .infinity, minHeight: 196, alignment: .topLeading)
-        .background(Color(hex: 0x0E1014).opacity(0.42), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
-        }
-    }
-
-    private func findingText(size: CGFloat) -> some View {
-        Text(sentence(size: size))
+    /// Title 2 (22pt). Scales with Dynamic Type from the Large content-size default.
+    private func findingText(_ pageItem: FindingItem) -> some View {
+        Text(sentence(pageItem))
+            .lineSpacing(4)
             .foregroundStyle(Color.white)
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func sentence(size: CGFloat) -> AttributedString {
-        let font = Font.custom("InnovatorGrotesk-Regular", size: size)
-        var before = AttributedString(item.before)
-        var highlight = AttributedString(item.highlight)
-        var after = AttributedString(item.after)
+    private func sentence(_ pageItem: FindingItem) -> AttributedString {
+        let font = Font.custom("InnovatorGrotesk-Regular", size: 22, relativeTo: .title2)
+        var before = AttributedString(pageItem.before)
+        var highlight = AttributedString(pageItem.highlight)
+        var after = AttributedString(pageItem.after)
         before.font = font
         highlight.font = font
         highlight.underlineStyle = .single
@@ -372,48 +359,119 @@ struct FindingAuroraOverlay: View {
         return before + highlight + after
     }
 
-    private var nav: some View {
-        HStack(spacing: 4) {
-            Button { step(-1) } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(index == 0)
-            Text("\(index + 1) / \(FindingLibrary.items.count)")
-                .font(LumenFont.font(12, .medium))
-                .foregroundStyle(Color.white.opacity(0.72))
-            Button { step(1) } label: {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(index >= FindingLibrary.items.count - 1)
-        }
-        .foregroundStyle(Color.white.opacity(0.9))
-    }
-
     private var close: some View {
         Button {
             withAnimation(Theme.motion) { model.findingMode = .off }
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color.white.opacity(0.72))
-                .frame(width: 28, height: 28)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.78))
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Close findings")
     }
 
-    private func step(_ delta: Int) {
-        let next = index + delta
-        guard FindingLibrary.items.indices.contains(next) else { return }
-        withAnimation(Theme.motion) { model.findingIndex = next }
+}
+
+/// Toast chrome. Alert copy sits on the aurora, so it stays unglassed.
+private struct FindingCardGlass: ViewModifier {
+    var enabled: Bool
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if enabled {
+            content.glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        } else {
+            content
+        }
+    }
+}
+
+/// UIPageControl: the iPhone pattern for a short set of peer pages.
+private struct FindingPageControl: UIViewRepresentable {
+    var count: Int
+    var index: Int
+    var suppressSync: Bool
+    var onSelect: (Int) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onSelect: onSelect)
+    }
+
+    func makeUIView(context: Context) -> UIPageControl {
+        let control = UIPageControl()
+        control.backgroundStyle = .minimal
+        control.currentPageIndicatorTintColor = .white
+        control.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.35)
+        control.hidesForSinglePage = true
+        control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
+        return control
+    }
+
+    func updateUIView(_ control: UIPageControl, context: Context) {
+        context.coordinator.onSelect = onSelect
+        context.coordinator.suppress = suppressSync
+        control.numberOfPages = count
+        if !suppressSync, control.currentPage != index {
+            control.currentPage = index
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var onSelect: (Int) -> Void
+        var suppress = false
+        init(onSelect: @escaping (Int) -> Void) { self.onSelect = onSelect }
+        @objc func changed(_ sender: UIPageControl) {
+            guard !suppress else { return }
+            onSelect(sender.currentPage)
+        }
+    }
+}
+
+/// Circular overflow next to Tell me more. Open and Keep monitoring appear only when that context has them.
+struct CircleOverflowButton: View {
+    var open: (title: String, symbol: String, action: () -> Void)? = nil
+    var keepMonitoring: (() -> Void)? = nil
+    var helpfulSelected: Bool
+    var notHelpfulSelected: Bool
+    var onHelpful: () -> Void
+    var onNotHelpful: () -> Void
+
+    private var marked: Bool { helpfulSelected || notHelpfulSelected }
+
+    var body: some View {
+        Menu {
+            if let open {
+                Button(action: open.action) {
+                    Label(open.title, systemImage: open.symbol)
+                }
+            }
+            if let keepMonitoring {
+                Button(action: keepMonitoring) {
+                    Label("Keep monitoring", systemImage: "eye")
+                }
+            }
+            Button(action: onHelpful) {
+                Label("Helpful", systemImage: helpfulSelected ? "hand.thumbsup.fill" : "hand.thumbsup")
+            }
+            Button(action: onNotHelpful) {
+                Label("Not helpful", systemImage: notHelpfulSelected ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: 44, height: 44)
+                .glassEffect(
+                    marked ? .regular.tint(Color.white.opacity(0.18)).interactive() : .regular.interactive(),
+                    in: Circle()
+                )
+        }
+        .menuOrder(.fixed)
+        .buttonStyle(.plain)
+        .accessibilityLabel("More actions")
+        .accessibilityValue(helpfulSelected ? "Helpful" : (notHelpfulSelected ? "Not helpful" : ""))
     }
 }
 
@@ -442,13 +500,14 @@ final class AuroraStage: NSObject, WKNavigationDelegate {
 
     private override init() {
         let configuration = WKWebViewConfiguration()
-        configuration.suppressesIncrementalRendering = false
+        configuration.suppressesIncrementalRendering = true
         configuration.websiteDataStore = .nonPersistent()
         let web = EdgeToEdgeWebView(frame: CGRect(x: 0, y: 0, width: 440, height: 956), configuration: configuration)
         web.isOpaque = false
         web.backgroundColor = .clear
         web.underPageBackgroundColor = .clear
         web.scrollView.backgroundColor = .clear
+        web.alpha = 0
         web.scrollView.isScrollEnabled = false
         web.scrollView.bounces = false
         web.isUserInteractionEnabled = false
@@ -479,8 +538,16 @@ final class AuroraStage: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard let pendingJS else { return }
-        webView.evaluateJavaScript(pendingJS, completionHandler: nil)
+        let reveal = {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                UIView.animate(withDuration: 0.18) { webView.alpha = 1 }
+            }
+        }
+        guard let pendingJS else {
+            reveal()
+            return
+        }
+        webView.evaluateJavaScript(pendingJS) { _, _ in reveal() }
     }
 
     private func schedulePark() {
@@ -624,29 +691,36 @@ private struct AuroraWebView: UIViewRepresentable {
       highlights: gl.getUniformLocation(program, 'uHighlights')
     };
     let colors = [0.255,0.063,0.776, 1.0,0.137,0.267, 0.369,0.467,0.690];
-    let hold = 480, span = 178;
+    let holdFrac = 0.42, spanFrac = 0.21;
     function parse(hex){
       const n = parseInt(hex.slice(1), 16);
       return [(n>>16&255)/255, (n>>8&255)/255, (n&255)/255];
     }
     window.llumenAurora = function(stops, fadeHold, fadeSpan){
       colors = [].concat(parse(stops[0]), parse(stops[1]), parse(stops[2]));
-      hold = fadeHold; span = fadeSpan;
+      const cssH = canvas.clientHeight;
+      if (cssH > 200 && fadeHold > 2.5) {
+        holdFrac = fadeHold / cssH;
+        spanFrac = Math.max(fadeSpan, 1) / cssH;
+      }
     };
     const start = performance.now() - 80000;
     function frame(now){
       const dpr = Math.min(devicePixelRatio || 1, 2);
-      const w = canvas.clientWidth > 1 ? canvas.clientWidth : 440;
-      const h = canvas.clientHeight > 1 ? canvas.clientHeight : 956;
-      if (canvas.width !== Math.floor(w*dpr) || canvas.height !== Math.floor(h*dpr)) {
-        canvas.width = Math.floor(w*dpr); canvas.height = Math.floor(h*dpr);
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (w < 200 || h < 200) { requestAnimationFrame(frame); return; }
+      const bw = Math.floor(w * dpr), bh = Math.floor(h * dpr);
+      if (canvas.width !== bw || canvas.height !== bh) {
+        canvas.width = bw; canvas.height = bh;
       }
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform1f(u.time, (now - start) / 1000);
       gl.uniform1f(u.amp, 1.44); gl.uniform1f(u.blend, 0.5);
       gl.uniform3fv(u.stops, colors); gl.uniform2f(u.res, canvas.width, canvas.height);
-      gl.uniform1f(u.hold, hold * dpr); gl.uniform1f(u.span, span * dpr);
+      gl.uniform1f(u.hold, canvas.height * holdFrac);
+      gl.uniform1f(u.span, canvas.height * spanFrac);
       gl.uniform1f(u.streaks, 0.55); gl.uniform1f(u.highlights, 0.05);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       requestAnimationFrame(frame);
@@ -656,10 +730,12 @@ private struct AuroraWebView: UIViewRepresentable {
     """
 }
 
-/// Conic ocean border from the finding toast card. Spins once per 1.15s.
+/// Conic ocean border. Turns twice, then fades out.
 struct OceanShimmerBorder: View {
     var stops: [Color] = FindingLibrary.oceanStops
-    @State private var spin = false
+    @State private var spin: Double = 0
+    @State private var ringOpacity: Double = 1
+    @State private var played = false
 
     var body: some View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -674,16 +750,20 @@ struct OceanShimmerBorder: View {
                         .init(color: stops[1], location: 1),
                     ],
                     center: .center,
-                    angle: .degrees(spin ? 360 : 0)
+                    angle: .degrees(spin)
                 ),
                 lineWidth: 1.5
             )
-            .onAppear {
-                withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                    spin = true
-                }
-            }
+            .opacity(ringOpacity)
+            .onAppear(perform: play)
             .allowsHitTesting(false)
+    }
+
+    private func play() {
+        guard !played else { return }
+        played = true
+        withAnimation(.easeOut(duration: 2.1)) { spin = 720 }
+        withAnimation(.easeIn(duration: 0.4).delay(1.7)) { ringOpacity = 0 }
     }
 }
 
@@ -692,7 +772,9 @@ struct LlumenAskButton: View {
     var cue: FindingAuroraMode
     var action: () -> Void
     @State private var pulse = false
-    @State private var spin = false
+    @State private var spin: Double = 0
+    @State private var ringOpacity: Double = 1
+    @State private var playedRing = false
 
     private var ring: [Color] {
         cue == .alert ? FindingLibrary.alertStops : FindingLibrary.oceanStops
@@ -716,7 +798,8 @@ struct LlumenAskButton: View {
                         ),
                         lineWidth: 2
                     )
-                    .rotationEffect(.degrees(spin ? 360 : 0))
+                    .rotationEffect(.degrees(spin))
+                    .opacity(ringOpacity)
                     .padding(1)
                 LlumenOrb()
                     .frame(width: 24, height: 24)
@@ -731,9 +814,10 @@ struct LlumenAskButton: View {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 pulse = true
             }
-            withAnimation(.linear(duration: 1.15).repeatForever(autoreverses: false)) {
-                spin = true
-            }
+            guard !playedRing else { return }
+            playedRing = true
+            withAnimation(.easeOut(duration: 2.1)) { spin = 720 }
+            withAnimation(.easeIn(duration: 0.4).delay(1.7)) { ringOpacity = 0 }
         }
     }
 }

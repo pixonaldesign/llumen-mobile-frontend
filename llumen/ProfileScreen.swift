@@ -29,11 +29,7 @@ struct ProfileScreen: View {
                 Spacer(minLength: 0)
             }
             .padding(Theme.spaceXL)
-            .background(Theme.fillQuiet, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous)
-                    .strokeBorder(Theme.border, lineWidth: 1)
-            }
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
 
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -54,11 +50,7 @@ struct ProfileScreen: View {
                 .foregroundStyle(Theme.primarySoft)
             }
             .padding(Theme.spaceXL)
-            .background(Theme.fillQuiet, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous)
-                    .strokeBorder(Theme.border, lineWidth: 1)
-            }
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
 
             Button {
                 model.password = ""
@@ -69,11 +61,7 @@ struct ProfileScreen: View {
                     .foregroundStyle(Theme.text)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Theme.fillQuiet, in: RoundedRectangle(cornerRadius: Theme.radiusUI, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Theme.radiusUI, style: .continuous)
-                            .strokeBorder(Theme.border, lineWidth: 1)
-                    }
+                    .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: Theme.radiusUI, style: .continuous))
             }
             .buttonStyle(.plain)
 

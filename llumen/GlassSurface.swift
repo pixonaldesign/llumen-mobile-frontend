@@ -24,7 +24,14 @@ struct GlassSurface<Content: View>: View {
         content()
             .padding(padding)
             .glassEffect(glass, in: shape)
-            .overlay { shape.strokeBorder(Theme.hairline, lineWidth: 0.5) }
+    }
+}
+
+/// List-row plate using the same regular Liquid Glass as the cards.
+struct GlassRowBackground: View {
+    var body: some View {
+        Color.clear
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
     }
 }
 
