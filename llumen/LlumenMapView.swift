@@ -15,12 +15,13 @@ struct LlumenMapView: UIViewRepresentable {
     var blurred: Bool
 
     func makeUIView(context: Context) -> WKWebView {
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let web = EdgeToEdgeWebView(frame: .zero, configuration: WKWebViewConfiguration())
         web.isOpaque = false
         web.backgroundColor = .clear
         web.scrollView.isScrollEnabled = false
         web.scrollView.bounces = false
         web.isUserInteractionEnabled = false
+        web.pinContentToPhysicalEdges()
         web.loadHTMLString(
             Self.page(longitude: longitude, latitude: latitude, zoom: zoom),
             baseURL: URL(string: "https://api.mapbox.com")
@@ -29,6 +30,7 @@ struct LlumenMapView: UIViewRepresentable {
     }
 
     func updateUIView(_ web: WKWebView, context: Context) {
+        web.pinContentToPhysicalEdges()
         let blur = blurred ? "true" : "false"
         let js = "window.llumenSync && window.llumenSync(\(longitude), \(latitude), \(zoom), \(blur));"
         web.evaluateJavaScript(js, completionHandler: nil)
@@ -39,7 +41,7 @@ struct LlumenMapView: UIViewRepresentable {
         <!DOCTYPE html>
         <html>
         <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
         <link href="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.css" rel="stylesheet">
         <script src="https://api.mapbox.com/mapbox-gl-js/v3.9.4/mapbox-gl.js"></script>
         <style>
@@ -80,4 +82,17 @@ struct LlumenMapView: UIViewRepresentable {
         </html>
         """
     }
+}
+
+extension WKWebView {
+    func pinContentToPhysicalEdges() {
+        scrollView.contentInsetAdjustmentBehavior = .never
+        scrollView.contentInset = .zero
+        scrollView.automaticallyAdjustsScrollIndicatorInsets = false
+    }
+}
+
+/// Map and aurora canvases paint under the status bar and home indicator.
+final class EdgeToEdgeWebView: WKWebView {
+    override var safeAreaInsets: UIEdgeInsets { .zero }
 }

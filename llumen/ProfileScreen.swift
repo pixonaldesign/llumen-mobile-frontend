@@ -81,6 +81,5 @@ struct ProfileScreen: View {
         }
         .padding(.horizontal, Theme.spaceXL)
         .padding(.top, Theme.spaceMD)
-        .padding(.bottom, Theme.chromeClearance)
     }
 }

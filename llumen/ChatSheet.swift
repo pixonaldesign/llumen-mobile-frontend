@@ -15,34 +15,33 @@ struct ChatSheet: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             header
-            ScrollView {
-                VStack(alignment: .leading, spacing: Theme.spaceLG) {
-                    if model.lines.isEmpty {
-                        Text("Ask about a briefing, a widget, or the board.")
-                            .font(LumenFont.font(16))
-                            .foregroundStyle(Theme.textSecondary)
-                            .padding(.top, Theme.spaceLG)
-                        ForEach(Array(prompts.enumerated()), id: \.element) { index, prompt in
-                            Button {
-                                send(prompt)
-                            } label: {
-                                OnceShimmerText(text: prompt, delay: 0.12 + Double(index) * 0.28)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(.vertical, 6)
+            Group {
+                if model.lines.isEmpty {
+                    Text("Ask about a briefing, a widget, or the board.")
+                        .font(LumenFont.font(16))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .padding(Theme.spaceXL)
+                        .padding(.top, Theme.spaceLG)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Theme.spaceLG) {
+                            ForEach(model.lines) { line in
+                                lineView(line)
                             }
-                            .buttonStyle(.plain)
                         }
-                    } else {
-                        ForEach(model.lines) { line in
-                            lineView(line)
-                        }
+                        .padding(Theme.spaceXL)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-                .padding(Theme.spaceXL)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            if model.lines.isEmpty {
+                suggestedPrompts
             }
             composer
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .background(Theme.background)
         .font(LumenFont.font(14))
     }
@@ -115,6 +114,24 @@ struct ChatSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var suggestedPrompts: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            ForEach(Array(prompts.enumerated()), id: \.element) { index, prompt in
+                Button {
+                    model.draft = prompt
+                } label: {
+                    OnceShimmerText(text: prompt, delay: 0.12 + Double(index) * 0.28)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 6)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, Theme.spaceXL)
+        .padding(.bottom, Theme.spaceSM)
     }
 
     private var composer: some View {

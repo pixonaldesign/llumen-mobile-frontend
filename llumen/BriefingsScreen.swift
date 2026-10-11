@@ -41,7 +41,6 @@ struct BriefingsScreen: View {
             }
         case .all:
             AllBriefingsGrid()
-                .padding(.bottom, 96)
         }
     }
 }
@@ -51,7 +50,7 @@ struct BriefingModeSwitcher: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            ForEach(BriefingMode.allCases) { mode in
+            ForEach(BriefingMode.allCases, id: \.id) { mode in
                 let selected = model.briefingMode == mode
                 Button {
                     withAnimation(Theme.motion) { model.briefingMode = mode }
@@ -59,8 +58,9 @@ struct BriefingModeSwitcher: View {
                     Text(mode.title)
                         .font(LumenFont.font(13, .medium))
                         .foregroundStyle(selected ? Color.black : Theme.textSecondary)
-                        .padding(.horizontal, 14)
-                        .frame(height: 28)
+                        .padding(.horizontal, 16)
+                        .frame(minWidth: 84)
+                        .frame(height: 44)
                         .background(selected ? Theme.primary : Color.clear, in: Capsule())
                 }
                 .buttonStyle(.plain)
@@ -103,7 +103,7 @@ private struct AllBriefingsGrid: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.bottom, Theme.chromeClearance + 28)
         }
         .scrollIndicators(.hidden)
     }
@@ -127,12 +127,12 @@ private struct StoryGridCard: View {
                         .foregroundStyle(Color.white.opacity(0.48))
                         .lineLimit(1)
                     Text(story.title)
-                        .font(LumenFont.font(18, .semibold))
+                        .font(LumenFont.font(15, .semibold))
                         .foregroundStyle(Color.white)
                         .lineSpacing(2)
                         .multilineTextAlignment(.leading)
                         .lineLimit(2)
-                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, minHeight: 40, alignment: .topLeading)
                 }
                 Text("\(story.kind) / \(story.sections)")
                     .font(LumenFont.font(12))
@@ -534,7 +534,7 @@ private struct FeedPage: View {
             }
             .foregroundStyle(Color.white)
             .padding(.horizontal, 12)
-            .frame(height: 36)
+            .frame(height: 44)
             .overlay {
                 Capsule().strokeBorder(Theme.textSecondary, lineWidth: 1.4)
             }
@@ -551,7 +551,7 @@ private struct FeedPage: View {
                 .font(LumenFont.font(14, .medium))
                 .foregroundStyle(Color.white)
                 .padding(.horizontal, 12)
-                .frame(height: 36)
+                .frame(height: 44)
                 .overlay {
                     Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
                 }
@@ -574,7 +574,7 @@ private struct FeedPage: View {
             Image(systemName: selected ? "\(symbol).fill" : symbol)
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(Color.white)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .background(selected ? Color.white.opacity(0.12) : Color.clear, in: Circle())
                 .overlay {
                     Circle().strokeBorder(Color.white.opacity(0.1), lineWidth: 1)

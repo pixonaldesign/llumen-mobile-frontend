@@ -9,9 +9,9 @@ struct AppShell: View {
             ZStack(alignment: .bottom) {
                 Group {
                     switch model.tab {
-                    case .briefings: BriefingsScreen()
-                    case .board: BoardScreen()
-                    case .profile: ProfileScreen()
+                        case .briefings: BriefingsScreen()
+                        case .board: BoardScreen()
+                        case .profile: ProfileScreen()
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

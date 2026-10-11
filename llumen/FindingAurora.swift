@@ -13,6 +13,7 @@ struct FindingItem: Identifiable {
     var before: String
     var highlight: String
     var after: String
+    var storyId: String? = nil
 }
 
 enum FindingLibrary {
@@ -27,7 +28,8 @@ enum FindingLibrary {
             title: "Environmental Wellness Monitoring Checks",
             before: "There has been a noticeable rise in illegal dumping operations throughout Abu Dhabi, with reports ",
             highlight: "increasing by 35%",
-            after: " compared with last week"
+            after: " compared with last week",
+            storyId: "r1"
         ),
         .init(
             id: "aqi-map",
@@ -35,7 +37,8 @@ enum FindingLibrary {
             title: "Air Quality Corridor Review",
             before: "Fine particulate readings along the coastal corridor are ",
             highlight: "up 18% overnight",
-            after: ", with three districts crossing the sensitive-group threshold"
+            after: ", with three districts crossing the sensitive-group threshold",
+            storyId: "r2"
         ),
         .init(
             id: "proactive-ai",
@@ -48,9 +51,14 @@ enum FindingLibrary {
     ]
 }
 
+private enum FindingVote: Equatable {
+    case up, down
+}
+
 struct FindingAuroraOverlay: View {
     @Environment(AppModel.self) private var model
     var mode: FindingAuroraMode
+    @State private var votes: [String: FindingVote] = [:]
 
     private var index: Int {
         guard !FindingLibrary.items.isEmpty else { return 0 }
@@ -60,38 +68,52 @@ struct FindingAuroraOverlay: View {
     private var item: FindingItem { FindingLibrary.items[index] }
 
     var body: some View {
-        Group {
-            switch mode {
-            case .off:
-                EmptyView()
-            case .alert:
-                alert
-            case .chip:
-                chipStack
-            }
-        }
-        .transition(.opacity)
-    }
-
-    private var alert: some View {
         GeometryReader { geo in
             let fadeHold = geo.size.height * 0.42
+            let home = max(geo.safeAreaInsets.bottom, 34)
+            let bottomPad = home + Theme.chromeClearance
             ZStack(alignment: .bottom) {
-                alertVeil
                 AuroraField(
                     stops: FindingLibrary.alertStops,
                     fadeHold: fadeHold,
                     fadeSpan: 178
                 )
-                .frame(height: geo.size.height * 0.78)
-                .frame(maxHeight: .infinity, alignment: .bottom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+                .opacity(mode == .alert ? 1 : 0)
+                .animation(nil, value: mode)
                 .allowsHitTesting(false)
-                alertCopy
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 150)
+                .accessibilityHidden(mode != .alert)
+
+                switch mode {
+                case .off:
+                    Color.clear.allowsHitTesting(false)
+                case .alert:
+                    ZStack(alignment: .bottom) {
+                        alertVeil
+                        alertCopy
+                            .padding(.horizontal, 24)
+                            .padding(.bottom, bottomPad)
+                    }
+                    .contentShape(Rectangle())
+                case .chip:
+                    chipStack
+                }
             }
+            .allowsHitTesting(mode != .off)
         }
         .ignoresSafeArea()
+        .simultaneousGesture(alertDismiss)
+    }
+
+    private var alertDismiss: some Gesture {
+        DragGesture(minimumDistance: 28)
+            .onEnded { value in
+                guard mode == .alert else { return }
+                let downward = value.translation.height
+                guard downward > 72, downward > abs(value.translation.width) else { return }
+                withAnimation(Theme.motion) { model.findingMode = .off }
+            }
     }
 
     private var alertVeil: some View {
@@ -117,92 +139,219 @@ struct FindingAuroraOverlay: View {
                     )
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .allowsHitTesting(false)
         .ignoresSafeArea()
     }
 
     private var alertCopy: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
                 Text(item.domain)
                     .font(LumenFont.font(13, .medium))
                     .foregroundStyle(Color.white.opacity(0.72))
                 Spacer(minLength: 8)
-                nav
                 close
             }
             findingText(size: 22)
+            alertActions
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Bottom row matches the toast: Tell me more leading, pager trailing.
+    private var alertActions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    keepMonitoring
+                    if item.storyId != nil { openSlides }
+                    voteGroup
+                }
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        keepMonitoring
+                        if item.storyId != nil { openSlides }
+                    }
+                    voteGroup
+                }
+            }
+            HStack(spacing: 10) {
+                tellMeMore
+                Spacer(minLength: 0)
+                nav
+            }
+        }
+    }
+
+    private var keepMonitoring: some View {
+        Button {
+            withAnimation(Theme.motion) { model.findingMode = .off }
+        } label: {
+            Text("Keep monitoring")
+                .font(LumenFont.font(14, .medium))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .overlay {
+                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var tellMeMore: some View {
+        Button {
+            model.attachedBriefing = item.title
+            model.chatTitle = item.title
+            model.showChat = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "text.bubble")
+                    .font(.system(size: 16, weight: .regular))
+                Text("Tell me more")
+                    .font(LumenFont.font(14, .medium))
+                    .lineLimit(1)
+            }
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 12)
+            .frame(height: 44)
+            .overlay {
+                Capsule().strokeBorder(Theme.textSecondary, lineWidth: 1.4)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var openSlides: some View {
+        Button {
+            guard let storyId = item.storyId else { return }
+            model.story = StoryRoute(id: storyId, title: item.title)
+        } label: {
+            Text("Open slides")
+                .font(LumenFont.font(14, .medium))
+                .foregroundStyle(Color.white)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 12)
+                .frame(height: 44)
+                .overlay {
+                    Capsule().strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var voteGroup: some View {
+        HStack(spacing: 8) {
+            voteButton(.up, symbol: "hand.thumbsup", label: "Helpful")
+            voteButton(.down, symbol: "hand.thumbsdown", label: "Not helpful")
+        }
+    }
+
+    private func voteButton(_ value: FindingVote, symbol: String, label: String) -> some View {
+        let selected = votes[item.id] == value
+        return Button {
+            votes[item.id] = votes[item.id] == value ? nil : value
+        } label: {
+            Image(systemName: selected ? "\(symbol).fill" : symbol)
+                .font(.system(size: 16, weight: .regular))
+                .foregroundStyle(Color.white)
+                .frame(width: 44, height: 44)
+                .background(selected ? Color.white.opacity(0.12) : Color.clear, in: Circle())
+                .overlay {
+                    Circle().strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private var chipStack: some View {
         VStack {
             Spacer(minLength: 0)
-            ZStack(alignment: .bottom) {
-                chipCard(item: FindingLibrary.items[min(index + 2, FindingLibrary.items.count - 1)], front: false)
-                    .padding(.horizontal, 28)
-                    .offset(y: -56)
-                    .opacity(index + 2 < FindingLibrary.items.count ? 1 : 0)
-                chipCard(item: FindingLibrary.items[min(index + 1, FindingLibrary.items.count - 1)], front: false)
-                    .padding(.horizontal, 18)
-                    .offset(y: -28)
-                    .opacity(index + 1 < FindingLibrary.items.count ? 1 : 0)
-                chipCard(item: item, front: true)
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 58 + 8 + 16)
+            chipCard(item: item)
+                .background {
+                    ZStack {
+                        if index + 2 < FindingLibrary.items.count {
+                            chipBack
+                                .padding(.horizontal, 16)
+                                .offset(y: -28)
+                        }
+                        if index + 1 < FindingLibrary.items.count {
+                            chipBack
+                                .padding(.horizontal, 8)
+                                .offset(y: -14)
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 58 + 8 + 16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func chipCard(item: FindingItem, front: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    /// Same height as the front card, shifted up so only a lip shows. No labels or body.
+    private var chipBack: some View {
+        RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Color(hex: 0x0E1014).opacity(0.28))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+
+    private func chipCard(item: FindingItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text(item.domain)
                     .font(LumenFont.font(11))
                     .foregroundStyle(Color.white.opacity(0.55))
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                if front { close }
+                close
             }
             findingText(size: 15)
                 .lineLimit(3)
-            if front {
-                HStack(spacing: 10) {
-                    Button {
-                        model.attachedBriefing = item.title
-                        model.chatTitle = item.title
-                        model.findingMode = .off
-                        model.showChat = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "text.bubble")
-                            Text("Tell me more")
-                        }
-                        .font(LumenFont.font(13, .medium))
-                        .foregroundStyle(Color.white)
+            HStack(spacing: 10) {
+                Button {
+                    model.attachedBriefing = item.title
+                    model.chatTitle = item.title
+                    model.findingMode = .off
+                    model.showChat = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "text.bubble")
+                        Text("Tell me more")
                     }
-                    .buttonStyle(.plain)
-                    Spacer(minLength: 0)
-                    nav
+                    .font(LumenFont.font(13, .medium))
+                    .foregroundStyle(Color.white)
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
+                nav
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, minHeight: front ? 148 : 120, alignment: .topLeading)
-        .background(Color(hex: 0x0E1014).opacity(front ? 0.42 : 0.28), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 18)
+        .frame(maxWidth: .infinity, minHeight: 196, alignment: .topLeading)
+        .background(Color(hex: 0x0E1014).opacity(0.42), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            if front {
-                OceanShimmerBorder()
-            } else {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.16), lineWidth: 1)
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
         }
-        .allowsHitTesting(front)
     }
 
     private func findingText(size: CGFloat) -> some View {
@@ -228,7 +377,8 @@ struct FindingAuroraOverlay: View {
             Button { step(-1) } label: {
                 Image(systemName: "chevron.left")
                     .font(.system(size: 12, weight: .bold))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(index == 0)
@@ -238,7 +388,8 @@ struct FindingAuroraOverlay: View {
             Button { step(1) } label: {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .bold))
-                    .frame(width: 28, height: 28)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(index >= FindingLibrary.items.count - 1)
@@ -277,26 +428,93 @@ struct AuroraField: View {
     }
 }
 
-/// Same fragment shader as `Aurora.tsx`, drawn in a transparent WebGL canvas.
-private struct AuroraWebView: UIViewRepresentable {
-    var stops: [Color]
-    var fadeHold: CGFloat
-    var fadeSpan: CGFloat
+/// One WebGL canvas for the whole process. Created at launch and parked in a
+/// window so the shader is already running when the alert is shown.
+@MainActor
+final class AuroraStage: NSObject, WKNavigationDelegate {
+    static let shared = AuroraStage()
 
-    func makeUIView(context: Context) -> WKWebView {
-        let web = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+    let webView: EdgeToEdgeWebView
+    private var claimed = false
+    private var parkAttempts = 0
+    private var warmupWindow: UIWindow?
+    private var pendingJS: String?
+
+    private override init() {
+        let configuration = WKWebViewConfiguration()
+        configuration.suppressesIncrementalRendering = false
+        configuration.websiteDataStore = .nonPersistent()
+        let web = EdgeToEdgeWebView(frame: CGRect(x: 0, y: 0, width: 440, height: 956), configuration: configuration)
         web.isOpaque = false
         web.backgroundColor = .clear
+        web.underPageBackgroundColor = .clear
+        web.scrollView.backgroundColor = .clear
         web.scrollView.isScrollEnabled = false
+        web.scrollView.bounces = false
         web.isUserInteractionEnabled = false
-        web.loadHTMLString(Self.page, baseURL: nil)
-        return web
+        web.pinContentToPhysicalEdges()
+        self.webView = web
+        super.init()
+        web.navigationDelegate = self
+        web.loadHTMLString(AuroraWebView.page, baseURL: nil)
     }
 
-    func updateUIView(_ web: WKWebView, context: Context) {
+    static func preload() {
+        shared.schedulePark()
+    }
+
+    func claim() -> WKWebView {
+        claimed = true
+        webView.removeFromSuperview()
+        warmupWindow?.isHidden = true
+        warmupWindow = nil
+        return webView
+    }
+
+    func push(stops: [Color], fadeHold: CGFloat, fadeSpan: CGFloat) {
         let hexes = stops.map(Self.hex).joined(separator: "','")
         let js = "window.llumenAurora && window.llumenAurora(['\(hexes)'], \(Float(fadeHold)), \(Float(fadeSpan)));"
-        web.evaluateJavaScript(js, completionHandler: nil)
+        pendingJS = js
+        webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        guard let pendingJS else { return }
+        webView.evaluateJavaScript(pendingJS, completionHandler: nil)
+    }
+
+    private func schedulePark() {
+        parkAttempts += 1
+        guard parkAttempts < 30, !claimed else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.park()
+        }
+    }
+
+    private func park() {
+        guard !claimed, webView.superview == nil else { return }
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        guard let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first else {
+            schedulePark()
+            return
+        }
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.screen.bounds
+        window.windowLevel = UIWindow.Level(rawValue: UIWindow.Level.normal.rawValue - 1)
+        window.backgroundColor = .clear
+        let host = UIViewController()
+        host.view.backgroundColor = .clear
+        window.rootViewController = host
+        guard !claimed, webView.superview == nil else { return }
+        webView.frame = window.bounds
+        webView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        host.view.addSubview(webView)
+        guard !claimed else {
+            webView.removeFromSuperview()
+            return
+        }
+        window.isHidden = false
+        warmupWindow = window
     }
 
     private static func hex(_ color: Color) -> String {
@@ -305,13 +523,31 @@ private struct AuroraWebView: UIViewRepresentable {
         ui.getRed(&r, green: &g, blue: &b, alpha: &a)
         return String(format: "#%02x%02x%02x", Int(r * 255), Int(g * 255), Int(b * 255))
     }
+}
 
-    private static let page = """
+/// Same fragment shader as `Aurora.tsx`, drawn in a transparent WebGL canvas.
+private struct AuroraWebView: UIViewRepresentable {
+    var stops: [Color]
+    var fadeHold: CGFloat
+    var fadeSpan: CGFloat
+
+    func makeUIView(context: Context) -> WKWebView {
+        let web = AuroraStage.shared.claim()
+        web.pinContentToPhysicalEdges()
+        return web
+    }
+
+    func updateUIView(_ web: WKWebView, context: Context) {
+        web.pinContentToPhysicalEdges()
+        AuroraStage.shared.push(stops: stops, fadeHold: fadeHold, fadeSpan: fadeSpan)
+    }
+
+    fileprivate static let page = """
     <!DOCTYPE html>
     <html><head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <style>html,body,canvas{margin:0;width:100%;height:100%;background:transparent;overflow:hidden}</style>
-    </head><body><canvas id="c"></canvas><script>
+    </head><body><canvas id="c" width="880" height="1912"></canvas><script>
     const canvas = document.getElementById('c');
     const gl = canvas.getContext('webgl2', { premultipliedAlpha: false, alpha: true });
     const vert = `#version 300 es
@@ -354,11 +590,11 @@ private struct AuroraWebView: UIViewRepresentable {
       float fadeEnd = uFadeHold + max(uFadeSpan, 1.0) * 1.65;
       float t = clamp((fromBottom - fadeStart) / max(fadeEnd - fadeStart, 1.0), 0.0, 1.0);
       float s = t*t*t*(t*(t*6.0-15.0)+10.0); float veil = 1.0 - s; auroraAlpha *= veil;
-      float nWide = snoise(vec2(uv.x * 4.5 + uTime * 0.035, uv.y * 0.18 - uTime * 0.012));
-      float nFine = snoise(vec2(uv.x * 11.0 - uTime * 0.028, uv.y * 0.06 + nWide * 0.4));
-      float fine = sin(uv.x * 48.0 + nWide * 3.4 + nFine * 1.6); float wide = sin(uv.x * 16.0 + nFine * 2.2 + uTime * 0.015);
+      float nWide = snoise(vec2(uv.x * 2.4 + uTime * 0.035, uv.y * 0.18 - uTime * 0.012));
+      float nFine = snoise(vec2(uv.x * 5.0 - uTime * 0.028, uv.y * 0.06 + nWide * 0.4));
+      float fine = sin(uv.x * 15.0 + nWide * 1.4 + nFine * 0.7); float wide = sin(uv.x * 7.0 + nFine * 0.9 + uTime * 0.015);
       fine = fine * 0.5 + 0.5; wide = wide * 0.5 + 0.5;
-      float curtains = mix(wide, fine, 0.62); float rays = smoothstep(0.26, 0.9, curtains) * mix(0.78, 1.0, veil);
+      float curtains = mix(wide, fine, 0.2); float rays = smoothstep(0.34, 0.86, curtains) * mix(0.72, 1.0, veil);
       auroraAlpha *= mix(1.0, 0.34 + rays, clamp(uStreaks, 0.0, 1.0));
       float core = pow(smoothstep(0.58, 1.0, curtains), 1.7) * veil * veil;
       vec3 bright = mix(ramp, vec3(0.82, 0.96, 1.0), 0.4);
@@ -400,7 +636,8 @@ private struct AuroraWebView: UIViewRepresentable {
     const start = performance.now() - 80000;
     function frame(now){
       const dpr = Math.min(devicePixelRatio || 1, 2);
-      const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
+      const w = canvas.clientWidth > 1 ? canvas.clientWidth : 440;
+      const h = canvas.clientHeight > 1 ? canvas.clientHeight : 956;
       if (canvas.width !== Math.floor(w*dpr) || canvas.height !== Math.floor(h*dpr)) {
         canvas.width = Math.floor(w*dpr); canvas.height = Math.floor(h*dpr);
       }
@@ -410,7 +647,7 @@ private struct AuroraWebView: UIViewRepresentable {
       gl.uniform1f(u.amp, 1.44); gl.uniform1f(u.blend, 0.5);
       gl.uniform3fv(u.stops, colors); gl.uniform2f(u.res, canvas.width, canvas.height);
       gl.uniform1f(u.hold, hold * dpr); gl.uniform1f(u.span, span * dpr);
-      gl.uniform1f(u.streaks, 0.24); gl.uniform1f(u.highlights, 0.04);
+      gl.uniform1f(u.streaks, 0.55); gl.uniform1f(u.highlights, 0.05);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       requestAnimationFrame(frame);
     }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ContentView: View {
+struct LlumenRoot: View {
     @State private var model = AppModel()
 
     var body: some View {
@@ -18,5 +18,5 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    LlumenRoot()
 }

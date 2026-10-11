@@ -1,13 +1,14 @@
 import SwiftUI
 
-@main struct MyApp: App {
+@main struct LlumenApp: App {
     init() {
         LumenFont.register()
+        AuroraStage.preload()
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            LlumenRoot()
         }
     }
 }
