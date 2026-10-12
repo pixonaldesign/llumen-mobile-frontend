@@ -28,45 +28,47 @@ struct BriefingsScreen: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        switch model.briefingMode {
-        case .latest:
+        if model.briefingMode.isReel {
             FeedReel()
-        case .all:
-            AllBriefingsGrid()
+        } else {
+            BriefingsGrid()
         }
     }
 }
 
 struct BriefingModeSwitcher: View {
     @Environment(AppModel.self) private var model
+    /// All sits on the reel. Alerts and Updates sit on the system surface, so the ink follows the glass.
+    var onMedia = false
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 28) {
             ForEach(BriefingMode.allCases, id: \.id) { mode in
                 let selected = model.briefingMode == mode
+                let ink = onMedia ? Color.white : Theme.text
                 Button {
                     withAnimation(Theme.motion) { model.briefingMode = mode }
                 } label: {
-                    Text(mode.title)
-                        .font(LumenFont.font(15, .medium, relativeTo: .subheadline))
-                        .foregroundStyle(selected ? Color.black : Theme.textSecondary)
-                        .padding(.horizontal, 16)
-                        .frame(minWidth: 84)
-                        .frame(height: 44)
-                        .background(selected ? Theme.primary : Color.clear, in: Capsule())
+                    VStack(spacing: 6) {
+                        Text(mode.title)
+                            .font(LumenFont.font(16, .medium, relativeTo: .subheadline))
+                            .foregroundStyle(selected ? ink : ink.opacity(0.55))
+                        Capsule()
+                            .fill(selected ? ink : Color.clear)
+                            .frame(width: 28, height: 2)
+                    }
+                    .padding(.vertical, 6)
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
-        .padding(3)
-        .glassEffect(.regular, in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Briefings")
     }
 }
 
-private struct AllBriefingsGrid: View {
+private struct BriefingsGrid: View {
     private let columns = [
         GridItem(.flexible(), spacing: 12),
         GridItem(.flexible(), spacing: 12),
@@ -92,6 +94,7 @@ private struct AllBriefingsGrid: View {
             .padding(.bottom, Theme.chromeClearance + 28)
         }
         .scrollIndicators(.hidden)
+        .floatingTabScrollEdge()
     }
 }
 
@@ -112,12 +115,12 @@ private struct StoryGridCard: View {
                     Text(story.category)
                         .font(LumenFont.font(12, .semibold))
                         .textCase(.uppercase)
-                        .foregroundStyle(Color.white.opacity(0.48))
+                        .foregroundStyle(Theme.text.opacity(0.48))
                         .lineLimit(1)
                         .padding(.trailing, 28)
                     Text(story.title)
                         .font(LumenFont.font(16, .semibold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(Theme.text)
                         .lineSpacing(3)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
@@ -132,15 +135,14 @@ private struct StoryGridCard: View {
 
             Menu {
                 Button(action: openStory) {
-                    Label("Open story", systemImage: "book")
+                    PhosphorMenuLabel(title: "Open story", icon: .bookOpen)
                 }
                 Button(action: tellMeMore) {
-                    Label("Tell me more", systemImage: "text.bubble")
+                    PhosphorMenuLabel(title: "Tell me more", icon: .chatCircle)
                 }
             } label: {
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(Color.white.opacity(0.72))
+                PhosphorIcon(.dotsThree, size: 18)
+                    .foregroundStyle(Theme.text.opacity(0.72))
                     .frame(width: 36, height: 36)
                     .contentShape(Rectangle())
             }
@@ -160,9 +162,7 @@ private struct StoryGridCard: View {
     }
 
     private func tellMeMore() {
-        model.attachedBriefing = story.title
-        model.chatTitle = story.title
-        model.showChat = true
+        model.askAbout(briefing: story.title)
     }
 }
 
@@ -384,6 +384,7 @@ private struct FeedReel: View {
             .scrollTargetBehavior(.paging)
             .scrollIndicators(.hidden)
             .ignoresSafeArea()
+            .floatingTabScrollEdge()
         }
         .ignoresSafeArea()
         .onAppear {
@@ -496,7 +497,7 @@ private struct FeedPage: View {
         CircleOverflowButton(
             open: stop.storyId == nil ? nil : (
                 title: "Open story",
-                symbol: "text.page",
+                icon: .bookOpen,
                 action: {
                     guard let storyId = stop.storyId else { return }
                     model.story = StoryRoute(id: storyId, title: stop.title)
@@ -511,22 +512,17 @@ private struct FeedPage: View {
 
     private var tellMeMore: some View {
         Button {
-            model.attachedBriefing = stop.title
-            model.chatTitle = stop.title
-            model.showChat = true
+            model.askAbout(briefing: stop.title, finding: stop.before + stop.highlight + stop.after)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 16, weight: .regular))
+                PhosphorIcon(.chatCircle, size: 18)
                 Text("Tell me more")
                     .font(LumenFont.font(14, .medium))
             }
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 12)
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 14)
             .frame(height: 44)
-            .overlay {
-                Capsule().strokeBorder(Theme.textSecondary, lineWidth: 1.4)
-            }
+            .glassEffect(.regular.interactive(), in: Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -544,10 +540,10 @@ private struct FeedChartCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(chart.label)
                 .font(LumenFont.font(13))
-                .foregroundStyle(Color.white.opacity(0.62))
+                .foregroundStyle(Theme.text.opacity(0.62))
             Text(chart.value)
                 .font(LumenFont.font(34, .medium))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(Theme.text)
                 .tracking(-0.8)
             GeometryReader { geo in
                 HStack(spacing: 0) {
@@ -564,12 +560,12 @@ private struct FeedChartCard: View {
                         Circle().fill(series.color).frame(width: 10, height: 10)
                         Text(series.name)
                             .font(LumenFont.font(14))
-                            .foregroundStyle(Color.white.opacity(0.76))
+                            .foregroundStyle(Theme.text.opacity(0.76))
                             .lineLimit(1)
                         Spacer(minLength: 8)
                         Text(series.value)
                             .font(.system(size: 13, weight: .medium, design: .monospaced))
-                            .foregroundStyle(Color.white.opacity(0.86))
+                            .foregroundStyle(Theme.text.opacity(0.86))
                             .lineLimit(1)
                     }
                 }

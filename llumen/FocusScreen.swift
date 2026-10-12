@@ -18,7 +18,6 @@ struct FocusScreen: View {
                 chart
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     private var map: some View {
@@ -27,7 +26,7 @@ struct FocusScreen: View {
                 .ignoresSafeArea()
             VStack(spacing: Theme.spaceLG) {
                 HStack(spacing: Theme.spaceMD) {
-                    GlassIconButton(systemName: "xmark", label: "Close map") { dismiss() }
+                    GlassIconButton(icon: .x, label: "Close map") { dismiss() }
                     Spacer()
                     Menu {
                         ForEach(styles, id: \.self) { name in
@@ -42,7 +41,7 @@ struct FocusScreen: View {
                             .frame(height: 36)
                             .glassEffect(.regular.interactive(), in: Capsule())
                     }
-                    GlassIconButton(systemName: "info", label: "About this map") { showInfo.toggle() }
+                    GlassIconButton(icon: .info, label: "About this map") { showInfo.toggle() }
                 }
                 if showInfo {
                     Text("Average speed on the coastal network. Darker teal is slower traffic.")
@@ -88,20 +87,28 @@ struct FocusScreen: View {
                         .foregroundStyle(Theme.textSecondary)
                 }
                 Spacer()
-                GlassIconButton(systemName: "xmark", label: "Close chart") { dismiss() }
+                GlassIconButton(icon: .x, label: "Close chart") { dismiss() }
             }
-            VStack(spacing: 10) {
-                focusBar("Al Muraqqabat", 0.92, "54.5%")
-                focusBar("Al Twar Fifth", 0.84, "51.6%")
-                focusBar("Al Nahda Second", 0.78, "50%")
-                focusBar("Umm Hurair Second", 0.70, "46.2%")
-                focusBar("Al Quasis Second", 0.64, "44.4%")
-            }
+            LumenHBarChart(
+                rows: [
+                    .init(name: "Al Muraqqabat", fraction: 0.92, valueLabel: "54.5%"),
+                    .init(name: "Al Twar Fifth", fraction: 0.84, valueLabel: "51.6%"),
+                    .init(name: "Al Nahda Second", fraction: 0.78, valueLabel: "50%"),
+                    .init(name: "Umm Hurair Second", fraction: 0.70, valueLabel: "46.2%"),
+                    .init(name: "Al Quasis Second", fraction: 0.64, valueLabel: "44.4%"),
+                ],
+                barHeight: 10,
+                nameWidth: 132,
+                labelSize: 13,
+                spacing: 12
+            )
             .padding(Theme.spaceXL)
             .frame(maxWidth: .infinity)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: Theme.radiusCard, style: .continuous))
             HStack(spacing: 6) {
-                RoundedRectangle(cornerRadius: 2).fill(Theme.negative).frame(width: 12, height: 8)
+                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                    .fill(LumenChart.series)
+                    .frame(width: 8, height: 8)
                 Text("Violation share")
                     .font(LumenFont.font(12, .medium))
                     .foregroundStyle(Theme.textSecondary)
@@ -117,25 +124,6 @@ struct FocusScreen: View {
         .background(Theme.background)
     }
 
-    private func focusBar(_ name: String, _ value: CGFloat, _ label: String) -> some View {
-        HStack(spacing: 8) {
-            Text(name)
-                .font(LumenFont.font(13))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 140, alignment: .leading)
-                .lineLimit(1)
-            GeometryReader { geo in
-                Capsule().fill(Theme.negative.opacity(0.9))
-                    .frame(width: max(8, geo.size.width * value), height: 8)
-                    .frame(maxHeight: .infinity, alignment: .center)
-            }
-            .frame(height: 16)
-            Text(label)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .foregroundStyle(Theme.text)
-                .frame(width: 48, alignment: .trailing)
-        }
-    }
 }
 
 private struct MapSketchFull: View {

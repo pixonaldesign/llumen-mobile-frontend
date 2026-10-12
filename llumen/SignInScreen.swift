@@ -4,6 +4,8 @@ import UIKit
 struct SignInScreen: View {
     @Environment(AppModel.self) private var model
     @FocusState private var field: Field?
+    var onCancel: (() -> Void)? = nil
+    var onSignedIn: (() -> Void)? = nil
 
     private enum Field: Hashable { case address, email, password }
 
@@ -13,6 +15,26 @@ struct SignInScreen: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: Theme.space3XL) {
+                        if onCancel != nil {
+                            HStack {
+                                Button {
+                                    onCancel?()
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        PhosphorIcon(.caretLeft, size: 14)
+                                        Text("Back")
+                                            .font(LumenFont.font(15, .medium))
+                                    }
+                                    .foregroundStyle(Theme.text)
+                                    .padding(.horizontal, 14)
+                                    .frame(height: 36)
+                                    .glassEffect(.regular.interactive(), in: Capsule())
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Back")
+                                Spacer()
+                            }
+                        }
                         Image("LlumenLogo")
                             .resizable()
                             .scaledToFit()
@@ -28,13 +50,14 @@ struct SignInScreen: View {
                             fieldBlock("Password", text: $model.password, id: .password, secure: true)
                             Button {
                                 model.signedIn = true
+                                onSignedIn?()
                             } label: {
                                 Text("Sign in")
                                     .font(LumenFont.font(16, .medium))
                                     .foregroundStyle(Color.black)
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 48)
-                                    .background(Theme.primary, in: Capsule())
+                                    .blueGlass()
                             }
                             .buttonStyle(.plain)
                             Button {
@@ -122,7 +145,7 @@ private struct PasswordHelpSheet: View {
                     .foregroundStyle(Color.black)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Theme.primary, in: Capsule())
+                    .blueGlass()
             }
             .buttonStyle(.plain)
             Button("Close") { dismiss() }

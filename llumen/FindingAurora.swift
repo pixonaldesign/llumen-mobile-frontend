@@ -63,6 +63,7 @@ struct FindingAuroraOverlay: View {
     @State private var pageDrag: CGFloat = 0
     @State private var slideID = 0
     @State private var sliding = false
+    @State private var auroraToken = 0
 
     private var index: Int {
         guard !FindingLibrary.items.isEmpty else { return 0 }
@@ -144,13 +145,15 @@ struct FindingAuroraOverlay: View {
                 guard mode == .alert else { return }
                 let downward = value.translation.height
                 guard downward > 72, downward > abs(value.translation.width) else { return }
-                withAnimation(Theme.motion) { model.findingMode = .off }
+                model.dismissFinding()
             }
     }
 
     /// Light rises from the bottom edge, then rests at full brightness.
     private func setAurora(showing: Bool) {
+        auroraToken += 1
         if showing {
+            AuroraStage.shared.setRunning(true)
             var reset = Transaction()
             reset.disablesAnimations = true
             withTransaction(reset) { auroraRise = 0.001 }
@@ -159,7 +162,13 @@ struct FindingAuroraOverlay: View {
             }
         } else {
             pageDrag = 0
-            withAnimation(.easeIn(duration: 0.32)) { auroraRise = 0.001 }
+            let token = auroraToken
+            withAnimation(.easeIn(duration: 0.32)) {
+                auroraRise = 0.001
+            } completion: {
+                guard auroraToken == token else { return }
+                AuroraStage.shared.setRunning(false)
+            }
         }
     }
 
@@ -192,12 +201,12 @@ struct FindingAuroraOverlay: View {
             HStack(alignment: .center, spacing: 8) {
                 Text(pageItem.domain)
                     .font(LumenFont.font(15, .medium, relativeTo: .subheadline))
-                    .foregroundStyle(Color.white.opacity(0.78))
+                    .foregroundStyle(card ? Theme.text.opacity(0.78) : Color.white.opacity(0.78))
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                close
+                close(onGlass: card)
             }
-            findingText(pageItem)
+            findingText(pageItem, onGlass: card)
             findingActions(pageItem)
         }
         .padding(.horizontal, 16)
@@ -221,6 +230,7 @@ struct FindingAuroraOverlay: View {
         FindingPageControl(
             count: FindingLibrary.items.count,
             index: index,
+            onMedia: mode == .alert,
             suppressSync: sliding,
             onSelect: { page in
                 guard FindingLibrary.items.indices.contains(page), page != index else { return }
@@ -294,14 +304,14 @@ struct FindingAuroraOverlay: View {
         CircleOverflowButton(
             open: pageItem.storyId == nil ? nil : (
                 title: "Open slides",
-                symbol: "rectangle.stack",
+                icon: .slideshow,
                 action: {
                     guard let storyId = pageItem.storyId else { return }
                     model.story = StoryRoute(id: storyId, title: pageItem.title)
                 }
             ),
             keepMonitoring: {
-                withAnimation(Theme.motion) { model.findingMode = .off }
+                model.dismissFinding()
             },
             helpfulSelected: votes[pageItem.id] == .up,
             notHelpfulSelected: votes[pageItem.id] == .down,
@@ -316,34 +326,29 @@ struct FindingAuroraOverlay: View {
 
     private func tellMeMore(_ pageItem: FindingItem) -> some View {
         Button {
-            model.attachedBriefing = pageItem.title
-            model.chatTitle = pageItem.title
-            model.showChat = true
+            model.askAbout(briefing: pageItem.title, finding: pageItem.before + pageItem.highlight + pageItem.after)
         } label: {
             HStack(spacing: 8) {
-                Image(systemName: "text.bubble")
-                    .font(.system(size: 16, weight: .regular))
+                PhosphorIcon(.chatCircle, size: 18)
                 Text("Tell me more")
                     .font(LumenFont.font(16, .medium, relativeTo: .callout))
                     .lineLimit(1)
             }
-            .foregroundStyle(Color.white)
+            .foregroundStyle(Theme.text)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .frame(height: 44)
-            .overlay {
-                Capsule().strokeBorder(Theme.textSecondary, lineWidth: 1.4)
-            }
+            .glassEffect(.regular.interactive(), in: Capsule())
         }
         .buttonStyle(.plain)
     }
 
     /// Title 2 (22pt). Scales with Dynamic Type from the Large content-size default.
-    private func findingText(_ pageItem: FindingItem) -> some View {
+    private func findingText(_ pageItem: FindingItem, onGlass: Bool) -> some View {
         Text(sentence(pageItem))
             .lineSpacing(4)
-            .foregroundStyle(Color.white)
+            .foregroundStyle(onGlass ? Theme.text : Color.white)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -359,13 +364,12 @@ struct FindingAuroraOverlay: View {
         return before + highlight + after
     }
 
-    private var close: some View {
+    private func close(onGlass: Bool) -> some View {
         Button {
-            withAnimation(Theme.motion) { model.findingMode = .off }
+            model.dismissFinding()
         } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.78))
+            PhosphorIcon(.x, size: 15)
+                .foregroundStyle(onGlass ? Theme.text.opacity(0.78) : Color.white.opacity(0.78))
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -392,6 +396,8 @@ private struct FindingCardGlass: ViewModifier {
 private struct FindingPageControl: UIViewRepresentable {
     var count: Int
     var index: Int
+    /// Aurora stays dark, so the dots stay white. Toast glass follows the system.
+    var onMedia: Bool
     var suppressSync: Bool
     var onSelect: (Int) -> Void
 
@@ -402,8 +408,7 @@ private struct FindingPageControl: UIViewRepresentable {
     func makeUIView(context: Context) -> UIPageControl {
         let control = UIPageControl()
         control.backgroundStyle = .minimal
-        control.currentPageIndicatorTintColor = .white
-        control.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.35)
+        applyChrome(control)
         control.hidesForSinglePage = true
         control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
         return control
@@ -413,8 +418,19 @@ private struct FindingPageControl: UIViewRepresentable {
         context.coordinator.onSelect = onSelect
         context.coordinator.suppress = suppressSync
         control.numberOfPages = count
+        applyChrome(control)
         if !suppressSync, control.currentPage != index {
             control.currentPage = index
+        }
+    }
+
+    private func applyChrome(_ control: UIPageControl) {
+        if onMedia {
+            control.currentPageIndicatorTintColor = .white
+            control.pageIndicatorTintColor = UIColor.white.withAlphaComponent(0.35)
+        } else {
+            control.currentPageIndicatorTintColor = .label
+            control.pageIndicatorTintColor = UIColor.label.withAlphaComponent(0.35)
         }
     }
 
@@ -431,7 +447,7 @@ private struct FindingPageControl: UIViewRepresentable {
 
 /// Circular overflow next to Tell me more. Open and Keep monitoring appear only when that context has them.
 struct CircleOverflowButton: View {
-    var open: (title: String, symbol: String, action: () -> Void)? = nil
+    var open: (title: String, icon: Phosphor, action: () -> Void)? = nil
     var keepMonitoring: (() -> Void)? = nil
     var helpfulSelected: Bool
     var notHelpfulSelected: Bool
@@ -444,27 +460,26 @@ struct CircleOverflowButton: View {
         Menu {
             if let open {
                 Button(action: open.action) {
-                    Label(open.title, systemImage: open.symbol)
+                    PhosphorMenuLabel(title: open.title, icon: open.icon)
                 }
             }
             if let keepMonitoring {
                 Button(action: keepMonitoring) {
-                    Label("Keep monitoring", systemImage: "eye")
+                    PhosphorMenuLabel(title: "Keep monitoring", icon: .eye)
                 }
             }
             Button(action: onHelpful) {
-                Label("Helpful", systemImage: helpfulSelected ? "hand.thumbsup.fill" : "hand.thumbsup")
+                PhosphorMenuLabel(title: "Helpful", icon: .thumbsUp)
             }
             Button(action: onNotHelpful) {
-                Label("Not helpful", systemImage: notHelpfulSelected ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                PhosphorMenuLabel(title: "Not helpful", icon: .thumbsDown)
             }
         } label: {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(Color.white)
+            PhosphorIcon(.dotsThree, size: 18)
+                .foregroundStyle(Theme.text)
                 .frame(width: 44, height: 44)
                 .glassEffect(
-                    marked ? .regular.tint(Color.white.opacity(0.18)).interactive() : .regular.interactive(),
+                    marked ? .regular.tint(Color.primary.opacity(0.18)).interactive() : .regular.interactive(),
                     in: Circle()
                 )
         }
@@ -497,6 +512,8 @@ final class AuroraStage: NSObject, WKNavigationDelegate {
     private var parkAttempts = 0
     private var warmupWindow: UIWindow?
     private var pendingJS: String?
+    private var pushed: (stops: [Color], fadeHold: CGFloat, fadeSpan: CGFloat)?
+    private var running = false
 
     private override init() {
         let configuration = WKWebViewConfiguration()
@@ -531,10 +548,23 @@ final class AuroraStage: NSObject, WKNavigationDelegate {
     }
 
     func push(stops: [Color], fadeHold: CGFloat, fadeSpan: CGFloat) {
+        if let pushed, pushed.stops == stops, pushed.fadeHold == fadeHold, pushed.fadeSpan == fadeSpan { return }
+        pushed = (stops, fadeHold, fadeSpan)
         let hexes = stops.map(Self.hex).joined(separator: "','")
         let js = "window.llumenAurora && window.llumenAurora(['\(hexes)'], \(Float(fadeHold)), \(Float(fadeSpan)));"
         pendingJS = js
         webView.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    /// The shader only draws frames while the aurora can be seen.
+    func setRunning(_ on: Bool) {
+        guard on != running else { return }
+        running = on
+        webView.evaluateJavaScript(Self.runJS(on), completionHandler: nil)
+    }
+
+    private static func runJS(_ on: Bool) -> String {
+        "window.llumenAuroraRun && window.llumenAuroraRun(\(on));"
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -543,11 +573,7 @@ final class AuroraStage: NSObject, WKNavigationDelegate {
                 UIView.animate(withDuration: 0.18) { webView.alpha = 1 }
             }
         }
-        guard let pendingJS else {
-            reveal()
-            return
-        }
-        webView.evaluateJavaScript(pendingJS) { _, _ in reveal() }
+        webView.evaluateJavaScript((pendingJS ?? "") + Self.runJS(running)) { _, _ in reveal() }
     }
 
     private func schedulePark() {
@@ -705,11 +731,22 @@ private struct AuroraWebView: UIViewRepresentable {
       }
     };
     const start = performance.now() - 80000;
+    let running = false, scheduled = false, warmed = false;
+    function schedule(){
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(frame);
+    }
+    window.llumenAuroraRun = function(on){
+      running = on;
+      if (on) schedule();
+    };
     function frame(now){
+      scheduled = false;
       const dpr = Math.min(devicePixelRatio || 1, 2);
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
-      if (w < 200 || h < 200) { requestAnimationFrame(frame); return; }
+      if (w < 200 || h < 200) { if (running || !warmed) schedule(); return; }
       const bw = Math.floor(w * dpr), bh = Math.floor(h * dpr);
       if (canvas.width !== bw || canvas.height !== bh) {
         canvas.width = bw; canvas.height = bh;
@@ -723,9 +760,10 @@ private struct AuroraWebView: UIViewRepresentable {
       gl.uniform1f(u.span, canvas.height * spanFrac);
       gl.uniform1f(u.streaks, 0.55); gl.uniform1f(u.highlights, 0.05);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
-      requestAnimationFrame(frame);
+      warmed = true;
+      if (running) schedule();
     }
-    requestAnimationFrame(frame);
+    schedule();
     </script></body></html>
     """
 }
@@ -770,11 +808,11 @@ struct OceanShimmerBorder: View {
 /// Frosted launcher from Llumen: glass disc, pulsing coral orb, ocean shimmer ring.
 struct LlumenAskButton: View {
     var cue: FindingAuroraMode
+    var token: Int
     var action: () -> Void
     @State private var pulse = false
     @State private var spin: Double = 0
-    @State private var ringOpacity: Double = 1
-    @State private var playedRing = false
+    @State private var ringOpacity: Double = 0
 
     private var ring: [Color] {
         cue == .alert ? FindingLibrary.alertStops : FindingLibrary.oceanStops
@@ -814,8 +852,22 @@ struct LlumenAskButton: View {
             withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 pulse = true
             }
-            guard !playedRing else { return }
-            playedRing = true
+        }
+        .onChange(of: token) { _, _ in
+            guard cue == .chip || cue == .alert else { return }
+            playRim()
+        }
+    }
+
+    /// Two turns, then the ring fades. Toast uses the ocean stops; aurora uses the alert stops.
+    private func playRim() {
+        var reset = Transaction()
+        reset.disablesAnimations = true
+        withTransaction(reset) {
+            spin = 0
+            ringOpacity = 1
+        }
+        DispatchQueue.main.async {
             withAnimation(.easeOut(duration: 2.1)) { spin = 720 }
             withAnimation(.easeIn(duration: 0.4).delay(1.7)) { ringOpacity = 0 }
         }

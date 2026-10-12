@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Regular dark Liquid Glass, matching React `GlassView`
-/// (`glassEffectStyle="regular"`, `colorScheme="dark"`).
+/// Regular Liquid Glass. The material follows the system appearance:
+/// dark glass while the system is dark, white glass when it is light.
 struct GlassSurface<Content: View>: View {
     var cornerRadius: CGFloat = Theme.radiusCard
     var tint: Color? = nil
@@ -36,19 +36,29 @@ struct GlassRowBackground: View {
 }
 
 struct GlassIconButton: View {
-    var systemName: String
+    var icon: Phosphor
     var label: String
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 15, weight: .semibold))
+            PhosphorIcon(icon, size: 16)
                 .foregroundStyle(Theme.text)
                 .frame(width: 36, height: 36)
                 .glassEffect(.regular.interactive(), in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
+    }
+}
+
+extension View {
+    /// Blue liquid glass, fully rounded, for primary actions.
+    func blueGlass() -> some View {
+        glassEffect(.regular.tint(Theme.primary).interactive(), in: Capsule())
+    }
+
+    func blueGlassCircle() -> some View {
+        glassEffect(.regular.tint(Theme.primary).interactive(), in: Circle())
     }
 }

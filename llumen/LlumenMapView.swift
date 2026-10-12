@@ -8,20 +8,83 @@ enum MapboxFeed {
 }
 
 /// One Mapbox GL map behind the feed. Blur and scale match `FeedLanding` `.mapBlur` (22px, 1.06, 700ms).
-struct LlumenMapView: UIViewRepresentable {
+/// Shows a shimmer until the first frame with all tiles has rendered.
+struct LlumenMapView: View {
     var longitude: Double
     var latitude: Double
     var zoom: Double
     var blurred: Bool
 
+    @State private var ready = false
+
+    var body: some View {
+        ZStack {
+            MapWebView(
+                longitude: longitude,
+                latitude: latitude,
+                zoom: zoom,
+                blurred: blurred,
+                onReady: { ready = true }
+            )
+            if !ready {
+                MapShimmer()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.35), value: ready)
+    }
+}
+
+/// Placeholder in the map's own base color, drawn by the `mapShimmer` Metal shader.
+private struct MapShimmer: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var start = Date.now
+
+    var body: some View {
+        TimelineView(.animation(paused: reduceMotion)) { context in
+            let time = Float(context.date.timeIntervalSince(start))
+            Rectangle()
+                .fill(MapWebView.base)
+                .visualEffect { content, proxy in
+                    content.colorEffect(
+                        ShaderLibrary.mapShimmer(.float2(proxy.size), .float(time))
+                    )
+                }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+private struct MapWebView: UIViewRepresentable {
+    static let base = Color(hex: 0x1C1C1E)
+
+    var longitude: Double
+    var latitude: Double
+    var zoom: Double
+    var blurred: Bool
+    var onReady: () -> Void
+
+    private var state: MapState {
+        MapState(longitude: longitude, latitude: latitude, zoom: zoom, blurred: blurred)
+    }
+
+    func makeCoordinator() -> Coordinator {
+        var loaded = state
+        loaded.blurred = false
+        return Coordinator(loaded: loaded)
+    }
+
     func makeUIView(context: Context) -> WKWebView {
-        let web = EdgeToEdgeWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        let configuration = WKWebViewConfiguration()
+        configuration.userContentController.add(context.coordinator, name: Coordinator.readyMessage)
+        let web = EdgeToEdgeWebView(frame: .zero, configuration: configuration)
         web.isOpaque = false
         web.backgroundColor = .clear
         web.scrollView.isScrollEnabled = false
         web.scrollView.bounces = false
         web.isUserInteractionEnabled = false
         web.pinContentToPhysicalEdges()
+        web.navigationDelegate = context.coordinator
         web.loadHTMLString(
             Self.page(longitude: longitude, latitude: latitude, zoom: zoom),
             baseURL: URL(string: "https://api.mapbox.com")
@@ -31,9 +94,55 @@ struct LlumenMapView: UIViewRepresentable {
 
     func updateUIView(_ web: WKWebView, context: Context) {
         web.pinContentToPhysicalEdges()
-        let blur = blurred ? "true" : "false"
-        let js = "window.llumenSync && window.llumenSync(\(longitude), \(latitude), \(zoom), \(blur));"
-        web.evaluateJavaScript(js, completionHandler: nil)
+        context.coordinator.onReady = onReady
+        context.coordinator.sync(state, in: web)
+    }
+
+    static func dismantleUIView(_ web: WKWebView, coordinator: Coordinator) {
+        web.configuration.userContentController.removeScriptMessageHandler(forName: Coordinator.readyMessage)
+    }
+
+    struct MapState: Equatable {
+        var longitude: Double
+        var latitude: Double
+        var zoom: Double
+        var blurred: Bool
+    }
+
+    /// Sends camera and blur changes once the page can take them, and only when they differ from what it shows.
+    final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+        static let readyMessage = "llumenMapReady"
+
+        var onReady: (() -> Void)?
+        private var applied: MapState
+        private var wanted: MapState
+        private var ready = false
+
+        init(loaded: MapState) {
+            applied = loaded
+            wanted = loaded
+        }
+
+        func sync(_ state: MapState, in web: WKWebView) {
+            wanted = state
+            flush(web)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            ready = true
+            flush(webView)
+        }
+
+        func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+            onReady?()
+        }
+
+        private func flush(_ web: WKWebView) {
+            guard ready, wanted != applied else { return }
+            applied = wanted
+            let js = "window.llumenSync && window.llumenSync(\(wanted.longitude), \(wanted.latitude), \(wanted.zoom), \(wanted.blurred));"
+            web.evaluateJavaScript(js, completionHandler: nil)
+        }
     }
 
     private static func page(longitude: Double, latitude: Double, zoom: Double) -> String {
@@ -75,6 +184,9 @@ struct LlumenMapView: UIViewRepresentable {
           map.on('load', function() {
             if (pending) map.easeTo(pending);
             map.resize();
+          });
+          map.once('idle', function() {
+            window.webkit.messageHandlers.\(Coordinator.readyMessage).postMessage(true);
           });
           new ResizeObserver(function() { map.resize(); }).observe(document.body);
         </script>

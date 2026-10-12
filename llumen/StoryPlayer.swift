@@ -34,7 +34,7 @@ struct StoryPlayer: View {
                         .foregroundStyle(Color.black)
                         .padding(.horizontal, 16)
                         .frame(height: 36)
-                        .background(Theme.primary, in: Capsule())
+                        .blueGlass()
                 }
                 .buttonStyle(.plain)
             }
@@ -81,7 +81,6 @@ struct StoryPlayer: View {
             .presentationDetents([.medium])
             .presentationBackground(Theme.background)
         }
-        .preferredColorScheme(.dark)
     }
 
     private var tickID: String { "\(index)-\(paused)" }
@@ -90,12 +89,12 @@ struct StoryPlayer: View {
         HStack(spacing: 4) {
             ForEach(frames.indices, id: \.self) { position in
                 Capsule()
-                    .fill(position < index ? Color.white : Color.white.opacity(0.28))
+                    .fill(position < index ? Theme.text : Theme.text.opacity(0.28))
                     .overlay(alignment: .leading) {
                         if position == index {
                             TimelineView(.animation(minimumInterval: 1 / 30, paused: paused)) { context in
                                 Capsule()
-                                    .fill(Color.white)
+                                    .fill(Theme.text)
                                     .scaleEffect(x: fill(at: context.date), y: 1, anchor: .leading)
                             }
                         }
@@ -124,7 +123,7 @@ struct StoryPlayer: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
-            GlassIconButton(systemName: "xmark", label: "Close briefing") {
+            GlassIconButton(icon: .x, label: "Close briefing") {
                 dismiss()
             }
         }

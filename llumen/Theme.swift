@@ -3,8 +3,13 @@ import SwiftUI
 
 /// Lumen design system tokens from `llumen-ai-frontend/src/styles/tokens.css`.
 enum Theme {
-    /// iOS dark elevated gray (`secondarySystemBackground`), in place of the navy wash.
-    static let background = Color(red: 28 / 255, green: 28 / 255, blue: 30 / 255)
+    /// Dark stays the elevated system gray. Light is a cool muted gray so glass cards read brighter.
+    static let background = Color(uiColor: UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 28 / 255, green: 28 / 255, blue: 30 / 255, alpha: 1)
+        }
+        return UIColor(red: 228 / 255, green: 229 / 255, blue: 235 / 255, alpha: 1)
+    })
     static let surfaceDeep = Color(hex: 0x0C0E10)
     static let neutral50 = Color(hex: 0xEAEBEC)
     static let neutral100 = Color(hex: 0xD4D5D7)
@@ -13,7 +18,12 @@ enum Theme {
     static let neutral800 = Color(hex: 0x181C20)
 
     static let primary = Color(hex: 0x73ADF5)
-    static let primarySoft = Color(hex: 0xABCEF9)
+    /// Light blue on dark glass; a deeper blue on white glass so the link stays readable.
+    static let primarySoft = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 171 / 255, green: 206 / 255, blue: 249 / 255, alpha: 1)
+            : UIColor(red: 36 / 255, green: 99 / 255, blue: 184 / 255, alpha: 1)
+    })
     static let positive = Color(hex: 0x25BA5D)
     static let warning = Color(hex: 0xFAB12A)
     static let negative = Color(hex: 0xED5151)
@@ -21,14 +31,33 @@ enum Theme {
     static let chartViolet = Color(hex: 0xA78BFA)
     static let chartPink = Color(hex: 0xF472B6)
 
-    static let text = Color.white
-    static let textSecondary = neutral100
-    static let textTertiary = neutral300
+    /// Labels follow the system: white on dark glass, black on light glass.
+    static let text = Color.primary
+    static let textSecondary = Color(uiColor: UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 212 / 255, green: 213 / 255, blue: 215 / 255, alpha: 1)
+        }
+        return UIColor.secondaryLabel.resolvedColor(with: traits)
+    })
+    static let textTertiary = Color(uiColor: UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 147 / 255, green: 151 / 255, blue: 156 / 255, alpha: 1)
+        }
+        return UIColor.tertiaryLabel.resolvedColor(with: traits)
+    })
 
-    static let border = Color.white.opacity(0.1)
-    static let borderStrong = Color.white.opacity(0.2)
-    static let hairline = Color.white.opacity(0.16)
-    static let fillQuiet = Color.white.opacity(0.06)
+    /// Unselected tab icons. Dark keeps the tertiary gray; light is darker so they hold on the glass.
+    static let chromeIdle = Color(uiColor: UIColor { traits in
+        if traits.userInterfaceStyle == .dark {
+            return UIColor(red: 147 / 255, green: 151 / 255, blue: 156 / 255, alpha: 1)
+        }
+        return UIColor(red: 58 / 255, green: 58 / 255, blue: 60 / 255, alpha: 1)
+    })
+
+    static let border = Color.primary.opacity(0.1)
+    static let borderStrong = Color.primary.opacity(0.2)
+    static let hairline = Color.primary.opacity(0.16)
+    static let fillQuiet = Color.primary.opacity(0.06)
 
     static let radiusUI: CGFloat = 12
     static let radiusCard: CGFloat = 16
@@ -53,6 +82,9 @@ enum LumenFont {
         for name in ["InnovatorGrotesk-Regular", "InnovatorGrotesk-Medium", "InnovatorGrotesk-SemiBold"] {
             guard let url = Bundle.main.url(forResource: name, withExtension: "otf") else { continue }
             CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+        if let phosphor = Bundle.main.url(forResource: "Phosphor", withExtension: "ttf") {
+            CTFontManagerRegisterFontsForURL(phosphor as CFURL, .process, nil)
         }
     }
 

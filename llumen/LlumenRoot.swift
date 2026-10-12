@@ -13,7 +13,6 @@ struct LlumenRoot: View {
         }
         .environment(model)
         .font(LumenFont.font(14))
-        .preferredColorScheme(.dark)
     }
 }
 
